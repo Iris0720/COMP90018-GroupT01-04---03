@@ -4,9 +4,6 @@ Six work packages, one per contributor. **Everyone writes production code and te
 
 Login is required. Optional features are included now and can be removed later.
 
-- **Required:** complete these first.
-- **Optional:** implement if time allows.
-- Check a task only after its code is merged and tested.
 
 ## 1. Login and Profile
 
