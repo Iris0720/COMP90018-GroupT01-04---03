@@ -69,20 +69,20 @@ The watch remains removable from the overall scope. If removed, transfer another
 
 These are internal app interfaces, not custom HTTP endpoints. UI code calls shared services/repositories. Authentication uses a provider adapter; activities and health records stay local unless optional cloud sync is added.
 
-| Owner | Interface | Input | Output |
-|---|---|---|---|
-| 1 | `register / login` | Email, password; name for registration | Signed-in user or authentication error |
-| 1 | `observeAuth / logout` | None | Login state / completion |
-| 1 | `updateProfile` | Name, goal, units, health note | Saved profile or validation error |
-| 2 | `read / requestPermission` | Permission type | Granted, denied or unavailable |
-| 3 | `startActivity` | Activity type, goal, demo/GPS source | Active session |
-| 3 | `pause / resume` | Session ID | Updated session |
-| 3 | `finishAndSave` | Session ID | Saved activity summary or retryable error |
+| Owner | Interface | Input | Output | Assignee |
+|---|---|---|---|---|
+| 1 | `register / login` | Email, password; name for registration | Signed-in user or authentication error | Zarif |
+| 1 | `observeAuth / logout` | None | Login state / completion | Zarif |
+| 1 | `updateProfile` | Name, goal, units, health note | Saved profile or validation error | Zarif |
+| 2 | `read / requestPermission` | Permission type | Granted, denied or unavailable | Iris
+| 3 | `startActivity` | Activity type, goal, demo/GPS source | Active session | Cassi
+| 3 | `pause / resume` | Session ID | Updated session | Cassi
+| 3 | `finishAndSave` | Session ID | Saved activity summary or retryable error | Cassi
 | 4 | `save / readRecord` | Record / record ID | Saved record / matching record |
 | 4 | `getReport` | Period, date, time zone | Activity totals, health counts, history and comparison |
-| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition |
-| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal |
-| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state |
+| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition | 
+| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal | 
+| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state | 
 
 ### Shared rules
 
