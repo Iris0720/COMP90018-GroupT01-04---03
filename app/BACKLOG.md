@@ -78,11 +78,11 @@ These are internal app interfaces, not custom HTTP endpoints. UI code calls shar
 | 3 | `startActivity` | Activity type, goal, demo/GPS source | Active session | Cassi
 | 3 | `pause / resume` | Session ID | Updated session | Cassi
 | 3 | `finishAndSave` | Session ID | Saved activity summary or retryable error | Cassi
-| 4 | `save / readRecord` | Record / record ID | Saved record / matching record |
-| 4 | `getReport` | Period, date, time zone | Activity totals, health counts, history and comparison |
-| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition | 
-| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal | 
-| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state | 
+| 4 | `save / readRecord` | Record / record ID | Saved record / matching record | Henry
+| 4 | `getReport` | Period, date, time zone | Activity totals, health counts, history and comparison | Henry
+| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition | Yan Yu
+| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal | Yan Yu
+| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state | Ricky
 
 ### Shared rules
 
