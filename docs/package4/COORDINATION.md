@@ -13,12 +13,24 @@ This file records Package 4 decisions, dependencies and changes that may affect 
 - Keep persistence and reporting behind `RecordRepository`; screens must not access Room DAOs directly.
 - Use `Flow` for observable history and structured `StorageResult` failures for loading/error handling.
 
+## Phase 3 decisions
+
+- Use Room 2.8.5 with KSP 2.3.10, matching the project's Kotlin 2.2.10, AGP 9 and Gradle 9 toolchain.
+- Use separate `activity_records` and `health_check_in_records` tables with indexed `ownerId` and `(ownerId, recordedAtEpochMillis)` columns.
+- Use `@Upsert` with `(ownerId, id)` composite primary keys for account-scoped idempotent retries and collision safety.
+- Require `ownerId` in every DAO read and history query. A record ID alone is never sufficient to read account data.
+- Observe the active owner as a `Flow`; history immediately emits `SIGNED_OUT` instead of retaining the previous account's records after logout.
+- Keep Room entities inside `data.local`; feature modules only receive domain models from `RecordRepository`.
+
 ## Changes to files originally introduced by another contributor
 
 | File | Original area | Package 4 change | Reason | Risk |
 |---|---|---|---|---|
 | `gradle/libs.versions.toml` | Frontend scaffold (Yan Yu) | Add Kotlin Coroutines version and library alias | `RecordRepository.observeHistory` returns `Flow` | Low; additive dependency only |
 | `app/build.gradle.kts` | Frontend scaffold (Yan Yu) | Add Coroutines Core dependency | Compile the repository contract | Low; no existing dependency changed |
+| `build.gradle.kts` | Frontend scaffold (Yan Yu) | Register the KSP plugin without applying it globally | Generate Room implementations in `:app` | Low; additive plugin alias |
+| `gradle/libs.versions.toml` | Frontend scaffold (Yan Yu) | Add Room 2.8.5 and KSP 2.3.10 aliases | Build the Package 4 database layer | Low; additive dependencies only |
+| `app/build.gradle.kts` | Frontend scaffold (Yan Yu) | Apply KSP and add Room runtime, KTX, compiler and testing dependencies | Build and test Room persistence | Low; no existing dependency changed |
 
 No existing screen, navigation, UI model or test file is modified in Phase 2.
 
@@ -26,7 +38,7 @@ No existing screen, navigation, UI model or test file is modified in Phase 2.
 
 ### Package 1 — Zarif
 
-- Package 4 currently defines `ActiveOwnerProvider` as its integration seam.
+- Package 4 defines `ActiveOwnerProvider` as its integration seam, with observable and one-shot owner access.
 - Zarif's authentication implementation must supply the active account ID and a signed-out state.
 - Possible conflict: Package 1 may introduce a different user/session abstraction. Resolve by adapting that abstraction to `ActiveOwnerProvider`, not by coupling Room to authentication-provider types.
 
@@ -62,3 +74,7 @@ No existing screen, navigation, UI model or test file is modified in Phase 2.
 - Confirm the final feeling, breathing and fatigue value sets with Yan Yu.
 - Confirm whether a single combined history or separate activity/health histories are preferred by Iris.
 - Confirm whether deleted records are out of scope or require soft-delete metadata.
+
+## Verification blockers
+
+- The project currently requests Android SDK 37.0 in `app/build.gradle.kts`, while the available local SDK is 36.1. Gradle reaches project configuration but cannot run compilation or tests until SDK 37.0 is installed or the team intentionally changes the compile/target SDK. Package 4 does not change this shared SDK decision without team agreement.

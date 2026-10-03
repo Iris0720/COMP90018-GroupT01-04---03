@@ -10,8 +10,11 @@ import com.example.comp90018.domain.model.Record
 import kotlinx.coroutines.flow.Flow
 
 interface ActiveOwnerProvider {
-    /** Returns the active account id, or null when signed out. */
-    fun activeOwnerId(): String?
+    /** Emits null when signed out so account-scoped streams can clear immediately. */
+    fun observeActiveOwnerId(): Flow<String?>
+
+    /** Returns the current account id for one-shot reads and writes. */
+    suspend fun currentOwnerId(): String?
 }
 
 interface RecordRepository {
