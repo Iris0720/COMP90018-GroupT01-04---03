@@ -40,19 +40,25 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
     var mealFields by remember { mutableStateOf<MealFields?>(null) }
     var mealMessage by remember { mutableStateOf<String?>(null) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    val estimatePhoto: (Uri) -> Unit = { photoUri ->
+        when (val result = service.estimateMeal(photoUri.toString())) {
+            is FeatureResult.Success -> {
+                mealFields = result.value.fields
+                mealMessage = result.value.sourceLabel
+            }
+            is FeatureResult.Failure -> mealMessage = result.message
+        }
+    }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
         val photoUri = pendingPhotoUri
         if (captured && photoUri != null) {
-            when (val result = service.estimateMeal(photoUri.toString())) {
-                is FeatureResult.Success -> {
-                    mealFields = result.value.fields
-                    mealMessage = result.value.sourceLabel
-                }
-                is FeatureResult.Failure -> mealMessage = result.message
-            }
+            estimatePhoto(photoUri)
         } else {
             mealMessage = "Photo capture was cancelled."
         }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { photoUri ->
+        if (photoUri != null) estimatePhoto(photoUri) else mealMessage = "No photo selected."
     }
 
     Column(
@@ -102,13 +108,17 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
                     modifier = Modifier.weight(1f)
                 ) { Text("Take photo") }
                 OutlinedButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Choose photo") }
+            }
+            OutlinedButton(
                     onClick = {
                         mealFields = MealFields(UUID.randomUUID().toString(), "", "", 0, 0, 0, 0)
                         mealMessage = "Manual entry"
                     },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Enter manually") }
-            }
+                    modifier = Modifier.fillMaxWidth()
+            ) { Text("Enter manually") }
         }
 
         mealFields?.let { fields ->
