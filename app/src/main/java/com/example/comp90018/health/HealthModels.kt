@@ -33,7 +33,7 @@ data class MealFields(
 
 data class MealEstimate(
     val fields: MealFields,
-    val sourceLabel: String = "Demo estimate"
+    val sourceLabel: String = "Automatic demo estimate from photo"
 )
 
 data class SavedMeal(val fields: MealFields)

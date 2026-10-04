@@ -36,7 +36,7 @@ class DemoHealthMealService : HealthMealService {
         return FeatureResult.Success(
             MealEstimate(
                 fields = MealFields(
-                    id = "meal-demo-1",
+                    id = "meal-${photoReference.hashCode()}",
                     name = "Chicken rice bowl",
                     serving = "1 bowl",
                     calories = 620,

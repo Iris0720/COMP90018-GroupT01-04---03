@@ -1,5 +1,9 @@
 package com.example.comp90018.ui.screens.health
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -7,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -19,10 +24,13 @@ import com.example.comp90018.ui.theme.ForestDark
 import com.example.comp90018.ui.theme.Mint
 import com.example.comp90018.ui.theme.Sand
 import com.example.comp90018.ui.theme.Sky
+import androidx.core.content.FileProvider
+import java.io.File
 import java.util.UUID
 
 @Composable
 fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService() }) {
+    val context = LocalContext.current
     var condition by remember { mutableStateOf(HealthCondition.UNKNOWN) }
     var showCheckIn by remember { mutableStateOf(false) }
     var feeling by remember { mutableStateOf<Feeling?>(null) }
@@ -31,6 +39,21 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
     var checkInMessage by remember { mutableStateOf<String?>(null) }
     var mealFields by remember { mutableStateOf<MealFields?>(null) }
     var mealMessage by remember { mutableStateOf<String?>(null) }
+    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val photoUri = pendingPhotoUri
+        if (captured && photoUri != null) {
+            when (val result = service.estimateMeal(photoUri.toString())) {
+                is FeatureResult.Success -> {
+                    mealFields = result.value.fields
+                    mealMessage = result.value.sourceLabel
+                }
+                is FeatureResult.Failure -> mealMessage = result.message
+            }
+        } else {
+            mealMessage = "Photo capture was cancelled."
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -69,18 +92,15 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
         Text("Meal log", style = MaterialTheme.typography.titleLarge)
         InfoCard(Sky) {
             Text("Add a meal", fontWeight = FontWeight.Bold)
-            Text("Photo estimates are demonstrations and must be checked before saving.", color = MaterialTheme.colorScheme.secondary)
+            Text("Take a food photo to create an automatic estimate. Check and edit it before saving.", color = MaterialTheme.colorScheme.secondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     onClick = {
-                        val result = service.estimateMeal("demo-photo")
-                        if (result is FeatureResult.Success) {
-                            mealFields = result.value.fields
-                            mealMessage = result.value.sourceLabel
-                        }
+                        pendingPhotoUri = createMealPhotoUri(context)
+                        cameraLauncher.launch(pendingPhotoUri!!)
                     },
                     modifier = Modifier.weight(1f)
-                ) { Text("Demo photo") }
+                ) { Text("Take photo") }
                 OutlinedButton(
                     onClick = {
                         mealFields = MealFields(UUID.randomUUID().toString(), "", "", 0, 0, 0, 0)
@@ -210,4 +230,10 @@ private fun InfoCard(color: Color, content: @Composable ColumnScope.() -> Unit) 
         verticalArrangement = Arrangement.spacedBy(9.dp),
         content = content
     )
+}
+
+private fun createMealPhotoUri(context: Context): Uri {
+    val directory = File(context.cacheDir, "meal_photos").apply { mkdirs() }
+    val photo = File.createTempFile("meal_", ".jpg", directory)
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo)
 }
