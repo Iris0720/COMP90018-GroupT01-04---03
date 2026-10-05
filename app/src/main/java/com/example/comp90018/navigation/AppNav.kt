@@ -20,9 +20,32 @@ import com.example.comp90018.ui.theme.AppBackground
 import com.example.comp90018.ui.theme.Forest
 import com.example.comp90018.ui.theme.ForestDark
 import com.example.comp90018.ui.theme.TrailwiseTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.comp90018.ui.screens.login.LoginScreen
 
 @Composable
 fun AppNav() {
+
+    var loggedIn by rememberSaveable { mutableStateOf(false) } 
+
+    if (loggedIn) {
+        MainScaffold(onLogout = { loggedIn = false })
+    } else {
+        LoginScreen(
+            onSignIn = {email, password -> 
+                loggedIn = true
+            },
+            onContinueAsGuest = {loggedIn = true},
+            onForgotPassword = { /* TODO */},
+            onCreateAccount = { /* TODO  */}
+        )
+    }
+
+}
+
+
+@Composable
+fun MainScaffold(onLogout: () -> Unit) {
     var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
 

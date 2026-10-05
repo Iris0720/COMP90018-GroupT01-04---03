@@ -7,3 +7,9 @@ enum class AppTab(val label: String, val mark: String) {
 enum class SessionState { SETUP, LIVE, PAUSED, COMPLETE }
 
 enum class WellbeingStatus { GOOD, CAUTION, UNKNOWN }
+
+data class LoginUiState(
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val loggedIn: Boolean = false,
+)
