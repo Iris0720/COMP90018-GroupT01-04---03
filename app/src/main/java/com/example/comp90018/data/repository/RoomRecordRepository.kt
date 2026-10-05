@@ -2,44 +2,46 @@ package com.example.comp90018.data.repository
 
 import com.example.comp90018.data.local.dao.ActivityRecordDao
 import com.example.comp90018.data.local.dao.HealthCheckInDao
-import com.example.comp90018.domain.model.ActivityRecord
 import com.example.comp90018.domain.model.ActivityRecordDraft
 import com.example.comp90018.domain.model.ActivityReport
 import com.example.comp90018.domain.model.HealthCheckInDraft
-import com.example.comp90018.domain.model.HealthCheckInRecord
 import com.example.comp90018.domain.model.HistoryQuery
 import com.example.comp90018.domain.model.PeriodComparison
 import com.example.comp90018.domain.model.Record
+import com.example.comp90018.domain.model.RecordDraft
 import com.example.comp90018.domain.repository.ActiveOwnerProvider
+import com.example.comp90018.domain.repository.HistoryState
 import com.example.comp90018.domain.repository.RecordRepository
 import com.example.comp90018.domain.repository.StorageError
 import com.example.comp90018.domain.repository.StorageErrorCode
 import com.example.comp90018.domain.repository.StorageResult
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 
 class RoomRecordRepository(
     private val activityDao: ActivityRecordDao,
     private val healthDao: HealthCheckInDao,
     private val ownerProvider: ActiveOwnerProvider
 ) : RecordRepository {
-    override suspend fun saveActivity(draft: ActivityRecordDraft): StorageResult<ActivityRecord> =
-        withOwner { ownerId ->
-            val entity = draft.toEntity(ownerId)
-            activityDao.upsert(entity)
-            entity.toDomain()
+    override suspend fun saveRecord(draft: RecordDraft): StorageResult<Record> = withOwner { ownerId ->
+        when (draft) {
+            is ActivityRecordDraft -> {
+                val entity = draft.toEntity(ownerId)
+                activityDao.upsert(entity)
+                entity.toDomain()
+            }
+            is HealthCheckInDraft -> {
+                val entity = draft.toEntity(ownerId)
+                healthDao.upsert(entity)
+                entity.toDomain()
+            }
         }
-
-    override suspend fun saveHealthCheckIn(
-        draft: HealthCheckInDraft
-    ): StorageResult<HealthCheckInRecord> = withOwner { ownerId ->
-        val entity = draft.toEntity(ownerId)
-        healthDao.upsert(entity)
-        entity.toDomain()
     }
 
     override suspend fun readRecord(recordId: String): StorageResult<Record> {
@@ -52,13 +54,18 @@ class RoomRecordRepository(
         }
     }
 
-    override fun observeHistory(query: HistoryQuery): Flow<StorageResult<List<Record>>> {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeHistory(query: HistoryQuery): Flow<HistoryState> = flow {
+        emit(HistoryState.Loading)
         val window = runCatching { HistoryWindowCalculator.calculate(query) }
-            .getOrElse { return flowOf(invalidRecord(it.message)) }
+            .getOrElse {
+                emit(HistoryState.Failure(invalidRecordError(it.message)))
+                return@flow
+            }
 
-        return ownerProvider.observeActiveOwnerId().flatMapLatest { ownerId ->
-            if (ownerId == null) {
-                flowOf(signedOut())
+        emitAll(ownerProvider.observeActiveOwnerId().flatMapLatest { ownerId ->
+            if (ownerId.isNullOrBlank()) {
+                flowOf(HistoryState.Failure(signedOutError()))
             } else {
                 combine(
                     activityDao.observeBetween(ownerId, window.startEpochMillis, window.endEpochMillis),
@@ -66,20 +73,20 @@ class RoomRecordRepository(
                 ) { activities, healthCheckIns ->
                     val records = (activities.map { it.toDomain() } + healthCheckIns.map { it.toDomain() })
                         .sortedByDescending { it.recordedAtEpochMillis }
-                    StorageResult.Success(records)
+                    if (records.isEmpty()) HistoryState.Empty else HistoryState.Success(records)
                 }
             }
-        }.catch { error ->
-            emit(
-                StorageResult.Failure(
-                    StorageError(
-                        StorageErrorCode.DATABASE_UNAVAILABLE,
-                        retryable = true,
-                        message = error.message
-                    )
+        })
+    }.catch { error ->
+        emit(
+            HistoryState.Failure(
+                StorageError(
+                    StorageErrorCode.DATABASE_UNAVAILABLE,
+                    retryable = true,
+                    message = error.message
                 )
             )
-        }
+        )
     }
 
     override suspend fun getReport(query: HistoryQuery): StorageResult<ActivityReport> {
@@ -139,13 +146,14 @@ class RoomRecordRepository(
         }
     }
 
-    private fun signedOut() = StorageResult.Failure(
-        StorageError(StorageErrorCode.SIGNED_OUT, retryable = false)
-    )
+    private fun signedOut() = StorageResult.Failure(signedOutError())
 
-    private fun invalidRecord(message: String?) = StorageResult.Failure(
+    private fun signedOutError() = StorageError(StorageErrorCode.SIGNED_OUT, retryable = false)
+
+    private fun invalidRecord(message: String?) = StorageResult.Failure(invalidRecordError(message))
+
+    private fun invalidRecordError(message: String?) =
         StorageError(StorageErrorCode.INVALID_RECORD, retryable = false, message)
-    )
 
     private class RecordNotFoundException : Exception()
 }

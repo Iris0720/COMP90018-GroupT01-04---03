@@ -78,3 +78,39 @@ No existing screen, navigation, UI model or test file is modified in Phase 2.
 ## Verification blockers
 
 - The project currently requests Android SDK 37.0 in `app/build.gradle.kts`, while the available local SDK is 36.1. Gradle reaches project configuration but cannot run compilation or tests until SDK 37.0 is installed or the team intentionally changes the compile/target SDK. Package 4 does not change this shared SDK decision without team agreement.
+- To validate Package 4 without changing the repository, an isolated workspace copy used compile/target SDK 36.1 and AndroidX Core 1.18.0. The real branch remains on the team's SDK 37 / Core 1.19.0 configuration.
+
+## Test coverage added after Phase 3
+
+- Domain validation and zero-distance pace behaviour.
+- Week and Month boundaries in `Australia/Melbourne`, including a daylight-saving transition.
+- Invalid time-zone rejection.
+- Repository owner injection, signed-out behaviour, account collision isolation, idempotent save and zero-baseline reporting.
+- Instrumented Room DAO tests for composite-key account isolation and Upsert behaviour.
+- A database reopen test verifies that records survive process/database reconstruction.
+- Explicit history-state tests cover Loading, Empty, Success and signed-out clearing.
+- Health-record save/read, cross-account NotFound, Year boundaries and non-zero previous-period comparison are covered.
+- Test dependencies are additive changes to the shared Gradle files; no feature implementation from another package is modified.
+
+## Verification results
+
+- `testDebugUnitTest`: passed in the isolated SDK 36.1 validation copy.
+- Package 4 local tests: 16 passed, 0 failed, 0 skipped after the Phase 4 contract completion.
+- Existing template local test: 1 passed.
+- Room/KSP main sources: generated and compiled successfully.
+- `assembleDebugAndroidTest`: passed; the DAO instrumentation test APK compiled successfully.
+- DAO instrumentation tests require an emulator or physical device to execute; they have not yet been run on-device.
+
+## Phase 4 contract completion
+
+- The public save boundary now matches the agreed `saveRecord` name and accepts the sealed `RecordDraft` type. Activity and health drafts remain strongly typed but share one integration entry point.
+- `observeHistory` exposes `HistoryState.Loading`, `Empty`, `Success` and `Failure`, so UI code does not have to infer loading or empty states from nullable data.
+- No authentication, activity-session, health-check-in or UI implementation is changed by Package 4.
+
+## Remaining integration dependencies (other owners)
+
+- **Package 1 — Zarif:** provide an adapter from the final authentication/session implementation to `ActiveOwnerProvider`. Package 4 cannot select the canonical account ID format.
+- **Package 2 — Iris / frontend:** map `HistoryState` and `ActivityReport` into Today/History screen state. Package 4 deliberately does not edit those screens.
+- **Package 3 — Cassi:** call `saveRecord(ActivityRecordDraft(...))` after a session finishes, using a stable retry-safe ID and UTC completion time.
+- **Package 5 — Yan Yu:** confirm final enum values and call `saveRecord(HealthCheckInDraft(...))` after validation. Package 4 stores but does not diagnose the condition.
+- On-device execution of the Room instrumentation suite still requires an emulator or physical Android device; compilation alone does not prove device execution.

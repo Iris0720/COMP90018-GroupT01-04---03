@@ -1,12 +1,9 @@
 package com.example.comp90018.domain.repository
 
-import com.example.comp90018.domain.model.ActivityRecord
-import com.example.comp90018.domain.model.ActivityRecordDraft
 import com.example.comp90018.domain.model.ActivityReport
-import com.example.comp90018.domain.model.HealthCheckInDraft
-import com.example.comp90018.domain.model.HealthCheckInRecord
 import com.example.comp90018.domain.model.HistoryQuery
 import com.example.comp90018.domain.model.Record
+import com.example.comp90018.domain.model.RecordDraft
 import kotlinx.coroutines.flow.Flow
 
 interface ActiveOwnerProvider {
@@ -18,15 +15,23 @@ interface ActiveOwnerProvider {
 }
 
 interface RecordRepository {
-    suspend fun saveActivity(draft: ActivityRecordDraft): StorageResult<ActivityRecord>
-
-    suspend fun saveHealthCheckIn(draft: HealthCheckInDraft): StorageResult<HealthCheckInRecord>
+    suspend fun saveRecord(draft: RecordDraft): StorageResult<Record>
 
     suspend fun readRecord(recordId: String): StorageResult<Record>
 
-    fun observeHistory(query: HistoryQuery): Flow<StorageResult<List<Record>>>
+    fun observeHistory(query: HistoryQuery): Flow<HistoryState>
 
     suspend fun getReport(query: HistoryQuery): StorageResult<ActivityReport>
+}
+
+sealed interface HistoryState {
+    data object Loading : HistoryState
+
+    data object Empty : HistoryState
+
+    data class Success(val records: List<Record>) : HistoryState
+
+    data class Failure(val error: StorageError) : HistoryState
 }
 
 sealed interface StorageResult<out T> {

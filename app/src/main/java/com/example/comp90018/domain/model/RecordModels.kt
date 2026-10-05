@@ -7,6 +7,12 @@ sealed interface Record {
     val recordedAtEpochMillis: Long
 }
 
+/** Owner-free input accepted by Package 4. The repository supplies the active owner. */
+sealed interface RecordDraft {
+    val id: String
+    val recordedAtEpochMillis: Long
+}
+
 enum class ActivityType {
     WALKING,
     RUNNING,
@@ -14,13 +20,13 @@ enum class ActivityType {
 }
 
 data class ActivityRecordDraft(
-    val id: String,
-    val recordedAtEpochMillis: Long,
+    override val id: String,
+    override val recordedAtEpochMillis: Long,
     val activityType: ActivityType,
     val durationSeconds: Long,
     val distanceMetres: Long,
     val steps: Long?
-) {
+) : RecordDraft {
     init {
         validateActivityFields(
             id = id,
@@ -69,13 +75,13 @@ enum class HealthCondition {
 }
 
 data class HealthCheckInDraft(
-    val id: String,
-    val recordedAtEpochMillis: Long,
+    override val id: String,
+    override val recordedAtEpochMillis: Long,
     val feeling: Feeling,
     val breathingDifficulty: SymptomLevel,
     val fatigue: SymptomLevel,
     val condition: HealthCondition
-) {
+) : RecordDraft {
     init {
         validateRecordIdentity(id, recordedAtEpochMillis)
     }
