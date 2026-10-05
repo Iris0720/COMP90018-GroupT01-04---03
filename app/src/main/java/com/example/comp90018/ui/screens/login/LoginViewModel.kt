@@ -3,17 +3,17 @@ package com.example.comp90018.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.comp90018.data.FakeUserLogin
 import com.example.comp90018.data.UserLoginRepository
 import com.example.comp90018.model.LoginUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.comp90018.data.SupabaseAuthRepository
 
 
 class LoginViewModel(
-    private val repo: UserLoginRepository = FakeUserLogin()
+    private val repo: UserLoginRepository = SupabaseAuthRepository()
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState())
