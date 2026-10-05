@@ -13,6 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.comp90018.model.WellbeingStatus
+import com.example.comp90018.permissions.PermissionController
+import com.example.comp90018.permissions.PermissionStatus
+import com.example.comp90018.permissions.PermissionStatusCard
+import com.example.comp90018.permissions.PermissionType
 import com.example.comp90018.ui.components.PrimaryButton
 import com.example.comp90018.ui.components.StatusChip
 import com.example.comp90018.ui.theme.ForestDark
@@ -21,8 +25,9 @@ import com.example.comp90018.ui.theme.Sand
 import com.example.comp90018.ui.theme.Sky
 
 @Composable
-fun HealthScreen() {
+fun HealthScreen(permissions: PermissionController) {
     var status by remember { mutableStateOf(WellbeingStatus.UNKNOWN) }
+    var cameraAttempted by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -52,10 +57,30 @@ fun HealthScreen() {
         Text("Meal log", style = MaterialTheme.typography.titleLarge)
         InfoCard(Sky) {
             Text("Add a meal", fontWeight = FontWeight.Bold)
-            Text("Use a photo when online or enter meal details manually.", color = MaterialTheme.colorScheme.secondary)
+            Text("Take a photo for meal estimation, or enter meal details manually. Camera access is requested only when you choose to take a photo.", color = MaterialTheme.colorScheme.secondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = {}, modifier = Modifier.weight(1f)) { Text("Take photo") }
+                OutlinedButton(
+                    onClick = {
+                        cameraAttempted = true
+                        permissions.requestPermission(PermissionType.CAMERA) {}
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Take photo") }
                 OutlinedButton(onClick = {}, modifier = Modifier.weight(1f)) { Text("Enter manually") }
+            }
+        }
+        if (cameraAttempted) {
+            when (val cameraStatus = permissions.status(PermissionType.CAMERA)) {
+                is PermissionStatus.Granted -> Text(
+                    "Camera access is ready. Photo capture will be connected with the meal-photo workflow.",
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                else -> PermissionStatusCard(
+                    permission = PermissionType.CAMERA,
+                    status = cameraStatus,
+                    onRetry = { permissions.requestPermission(PermissionType.CAMERA) {} },
+                    onSettings = { permissions.openSettings(PermissionType.CAMERA, cameraStatus) }
+                )
             }
         }
         Text(

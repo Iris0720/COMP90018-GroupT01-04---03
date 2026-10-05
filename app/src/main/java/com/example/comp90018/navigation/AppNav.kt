@@ -12,6 +12,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.comp90018.model.AppTab
+import com.example.comp90018.permissions.rememberPermissionController
 import com.example.comp90018.ui.screens.activity.ActivityScreen
 import com.example.comp90018.ui.screens.health.HealthScreen
 import com.example.comp90018.ui.screens.profile.ProfileScreen
@@ -23,6 +24,7 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 
 @Composable
 fun AppNav() {
+    val permissions = rememberPermissionController()
     var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
 
@@ -45,13 +47,13 @@ fun AppNav() {
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
                 AppTab.TODAY -> TodayScreen(onStartActivity = { selectedTab = AppTab.ACTIVITY })
-                AppTab.ACTIVITY -> ActivityScreen()
-                AppTab.HEALTH -> HealthScreen()
+                AppTab.ACTIVITY -> ActivityScreen(permissions)
+                AppTab.HEALTH -> HealthScreen(permissions)
             }
         }
     }
 
-    if (showProfile) ProfileScreen(onDismiss = { showProfile = false })
+    if (showProfile) ProfileScreen(permissions, onDismiss = { showProfile = false })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
