@@ -2,7 +2,7 @@ package com.example.comp90018.health
 
 interface HealthMealService {
     fun submitCheckIn(draft: CheckInDraft): FeatureResult<SavedCheckIn>
-    fun estimateMeal(photoReference: String): FeatureResult<MealEstimate>
+    suspend fun estimateMeal(photoReference: String): FeatureResult<MealEstimate>
     fun saveMeal(fields: MealFields): FeatureResult<SavedMeal>
 }
 
@@ -29,7 +29,7 @@ class DemoHealthMealService : HealthMealService {
         return FeatureResult.Success(saved)
     }
 
-    override fun estimateMeal(photoReference: String): FeatureResult<MealEstimate> {
+    override suspend fun estimateMeal(photoReference: String): FeatureResult<MealEstimate> {
         if (photoReference.isBlank()) {
             return FeatureResult.Failure("Choose a photo before estimating the meal.", false)
         }

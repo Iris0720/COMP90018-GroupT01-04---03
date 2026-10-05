@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.comp90018.health.*
+import com.example.comp90018.BuildConfig
 import com.example.comp90018.ui.components.PrimaryButton
 import com.example.comp90018.ui.components.StatusChip
 import com.example.comp90018.ui.theme.ForestDark
@@ -27,10 +28,15 @@ import com.example.comp90018.ui.theme.Sky
 import androidx.core.content.FileProvider
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.launch
 
 @Composable
-fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService() }) {
+fun HealthScreen(service: HealthMealService? = null) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val healthMealService = remember(service, context) {
+        service ?: LogMealHealthMealService(context.contentResolver, BuildConfig.LOGMEAL_API_TOKEN)
+    }
     var condition by remember { mutableStateOf(HealthCondition.UNKNOWN) }
     var showCheckIn by remember { mutableStateOf(false) }
     var feeling by remember { mutableStateOf<Feeling?>(null) }
@@ -40,13 +46,19 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
     var mealFields by remember { mutableStateOf<MealFields?>(null) }
     var mealMessage by remember { mutableStateOf<String?>(null) }
     var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var analysingPhoto by remember { mutableStateOf(false) }
     val estimatePhoto: (Uri) -> Unit = { photoUri ->
-        when (val result = service.estimateMeal(photoUri.toString())) {
-            is FeatureResult.Success -> {
-                mealFields = result.value.fields
-                mealMessage = result.value.sourceLabel
+        analysingPhoto = true
+        mealMessage = null
+        scope.launch {
+            when (val result = healthMealService.estimateMeal(photoUri.toString())) {
+                is FeatureResult.Success -> {
+                    mealFields = result.value.fields
+                    mealMessage = result.value.sourceLabel
+                }
+                is FeatureResult.Failure -> mealMessage = result.message
             }
-            is FeatureResult.Failure -> mealMessage = result.message
+            analysingPhoto = false
         }
     }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
@@ -81,7 +93,7 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
             } else {
                 CheckInForm(feeling, breathing, fatigue, { feeling = it }, { breathing = it }, { fatigue = it })
                 PrimaryButton("Save check-in") {
-                    when (val result = service.submitCheckIn(CheckInDraft(UUID.randomUUID().toString(), feeling, breathing, fatigue))) {
+                    when (val result = healthMealService.submitCheckIn(CheckInDraft(UUID.randomUUID().toString(), feeling, breathing, fatigue))) {
                         is FeatureResult.Success -> {
                             condition = result.value.condition
                             checkInMessage = "Check-in saved."
@@ -119,6 +131,12 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
                     },
                     modifier = Modifier.fillMaxWidth()
             ) { Text("Enter manually") }
+            if (analysingPhoto) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Text("Recognising food and calculating nutrition…")
+                }
+            }
         }
 
         mealFields?.let { fields ->
@@ -128,7 +146,7 @@ fun HealthScreen(service: HealthMealService = remember { DemoHealthMealService()
                 onChange = { mealFields = it },
                 onCancel = { mealFields = null },
                 onSave = {
-                    when (val result = service.saveMeal(fields)) {
+                    when (val result = healthMealService.saveMeal(fields)) {
                         is FeatureResult.Success -> {
                             mealMessage = "${result.value.fields.name} saved."
                             mealFields = null
