@@ -22,20 +22,23 @@ import com.example.comp90018.ui.theme.ForestDark
 import com.example.comp90018.ui.theme.TrailwiseTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.comp90018.ui.screens.login.LoginScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.comp90018.ui.screens.login.LoginViewModel
 
 @Composable
 fun AppNav() {
 
-    var loggedIn by rememberSaveable { mutableStateOf(false) } 
+    val vm: LoginViewModel = viewModel()
+    val state by vm.state.collectAsState()
 
-    if (loggedIn) {
-        MainScaffold(onLogout = { loggedIn = false })
+    if (state.loggedIn) {
+        MainScaffold(onLogout = { vm.signOut() })
     } else {
         LoginScreen(
-            onSignIn = {email, password -> 
-                loggedIn = true
-            },
-            onContinueAsGuest = {loggedIn = true},
+            isLoading = state.isLoading,
+            errorMessage = state.error,
+            onSignIn = { email, password -> vm.signIn(email, password) },
+            onContinueAsGuest = { vm.continueAsGuest() },
             onForgotPassword = { /* TODO */},
             onCreateAccount = { /* TODO  */}
         )

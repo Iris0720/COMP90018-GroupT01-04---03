@@ -41,6 +41,8 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 
 @Composable
 fun LoginScreen(
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
     onSignIn: (email: String, password: String) -> Unit = { _, _ -> },
     onContinueAsGuest: () -> Unit = {},
     onForgotPassword: () -> Unit = {},
@@ -143,7 +145,14 @@ fun LoginScreen(
                 shape = fieldShape,
                 modifier = Modifier.fillMaxWidth(),
             )
-
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    style = type.bodySmall,
+                    color = colors.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -161,12 +170,13 @@ fun LoginScreen(
 
             Button(
                 onClick = { onSignIn(email, password) },
+                enabled = !isLoading,
                 shape = fieldShape,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
             ) {
-                Text("Sign in", style = type.titleMedium)
+                Text(if (isLoading) "Signing in..." else "Sign in", style = type.titleMedium)
             }
 
             Spacer(Modifier.height(12.dp))
