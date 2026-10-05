@@ -33,14 +33,16 @@ The Android app must never store raw passwords or use a Supabase `service_role`/
 2. Open **SQL Editor** in the Supabase Dashboard.
 3. Run `migrations/202610050001_create_profiles.sql` once.
 4. Run `migrations/202610050002_create_app_records.sql` once.
-5. Run `verification/verify_schema.sql` and confirm that all five rows have `rls_enabled = true`. `profiles` must have three policies and each record table must have four.
-6. In **Authentication**, create two test users or sign up through the app.
-7. Confirm that each signup creates one row in `public.profiles`.
-8. Confirm through the app that User A cannot read or update User B's profile or records.
+5. Run `migrations/202610050003_align_activity_contract.sql` once.
+6. Run `verification/verify_schema.sql` and confirm that all five rows have `rls_enabled = true`. `profiles` must have three policies and each record table must have four.
+7. Run `verification/verify_activity_contract.sql` and confirm that `started_at`, `finished_at` and `segment_number` are present.
+8. In **Authentication**, create two test users or sign up through the app.
+9. Confirm that each signup creates one row in `public.profiles`.
+10. Confirm through the app that User A cannot read or update User B's profile or records.
 
-Both migrations and the schema verification query were run successfully on 5 October 2026. This confirms schema and policy presence, but the two-user isolation test still needs the Android authentication flow.
+All three migrations and both schema verification queries were run successfully on 5 October 2026. This confirms schema and policy presence, but the two-user isolation test still needs the Android authentication flow.
 
-Use the rollback scripts only in a disposable development project. Run `202610050002_drop_app_records.sql` before `202610050001_drop_profiles.sql`. They delete application data but do not delete Auth users.
+Use the rollback scripts only in a disposable development project. Revert migration 003 before running `202610050002_drop_app_records.sql`, then run `202610050001_drop_profiles.sql`. The drop scripts delete application data but do not delete Auth users.
 
 ## Android contract
 
@@ -80,12 +82,12 @@ Registration should send `display_name` as signup metadata so the database trigg
 
 - The current project uses `minSdk = 24`.
 - The current Supabase Kotlin documentation states that the client requires Android 26 unless core library desugaring is enabled.
-- Decide as a team whether to raise `minSdk` to 26 or keep 24 and add desugaring before adding the dependency.
-- Add the `auth-kt` and `postgrest-kt` modules plus a compatible Ktor Android engine.
+- The project keeps `minSdk = 24` and enables core library desugaring for the Supabase client.
+- The shared build adds `auth-kt`, `postgrest-kt`, Kotlin serialization and the Ktor Android engine.
 - Put the project URL and publishable key into ignored `local.properties`, then expose them through generated `BuildConfig` fields.
 - Commit a placeholder/example configuration only. Never commit real secret or service-role keys.
 
-Do not pin library versions until the auth branch is available: the versions must be compatible with its Kotlin, Ktor and serialization configuration.
+See `TEAM_SETUP.md` for teammate onboarding and repository boundaries.
 
 ## Acceptance checks
 
