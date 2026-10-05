@@ -1,6 +1,8 @@
 package com.example.comp90018.health
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -8,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 class LogMealHealthMealService(
@@ -53,8 +56,7 @@ class LogMealHealthMealService(
         val connection = open("https://api.logmeal.com/v2/image/segmentation/complete/v1.0")
         connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         connection.doOutput = true
-        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw ApiException("The selected photo could not be read.", false)
+        val bytes = prepareUpload(uri)
         connection.outputStream.use { output ->
             output.write("--$boundary\r\n".toByteArray())
             output.write("Content-Disposition: form-data; name=\"image\"; filename=\"meal.jpg\"\r\n".toByteArray())
@@ -63,6 +65,40 @@ class LogMealHealthMealService(
             output.write("\r\n--$boundary--\r\n".toByteArray())
         }
         return response(connection)
+    }
+
+    /** LogMeal rejects uploads at or above 1 MiB, so normalise camera/gallery images first. */
+    private fun prepareUpload(uri: Uri): ByteArray {
+        val bitmap = contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+            ?: throw ApiException("The selected photo could not be read.", false)
+        val longestSide = maxOf(bitmap.width, bitmap.height)
+        val scale = minOf(1f, 1600f / longestSide)
+        val uploadBitmap = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width * scale).toInt().coerceAtLeast(1),
+                (bitmap.height * scale).toInt().coerceAtLeast(1),
+                true
+            ).also { bitmap.recycle() }
+        } else {
+            bitmap
+        }
+
+        var quality = 88
+        var bytes: ByteArray
+        do {
+            bytes = ByteArrayOutputStream().use { output ->
+                uploadBitmap.compress(Bitmap.CompressFormat.JPEG, quality, output)
+                output.toByteArray()
+            }
+            quality -= 8
+        } while (bytes.size > MAX_UPLOAD_BYTES && quality >= 40)
+        uploadBitmap.recycle()
+
+        if (bytes.size > MAX_UPLOAD_BYTES) {
+            throw ApiException("The selected photo is too large to upload.", false)
+        }
+        return bytes
     }
 
     private fun requestNutrition(imageId: Long): JSONObject {
@@ -89,6 +125,7 @@ class LogMealHealthMealService(
             val message = when (code) {
                 401 -> "The LogMeal token is invalid or expired."
                 403 -> "This LogMeal account cannot use the requested feature."
+                413 -> "The selected photo is too large to upload."
                 429 -> "The food recognition limit has been reached. Try again later."
                 else -> "Food recognition failed (HTTP $code)."
             }
@@ -136,4 +173,8 @@ class LogMealHealthMealService(
     }
 
     private class ApiException(message: String, val retryable: Boolean) : Exception(message)
+
+    private companion object {
+        const val MAX_UPLOAD_BYTES = 950_000
+    }
 }
