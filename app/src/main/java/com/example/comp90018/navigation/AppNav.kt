@@ -61,32 +61,35 @@ fun MainScaffold(onLogout: () -> Unit) {
     var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
 
-    Scaffold(
-        containerColor = AppBackground,
-        topBar = { AppHeader(selectedTab.label, onProfile = { showProfile = true }) },
-        bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                AppTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = { Text(tab.mark, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                        label = { Text(tab.label) }
-                    )
+    if (showProfile) {
+        ProfileScreen(onDismiss = { showProfile = false }, onLogout = { onLogout() })
+    } else {
+        Scaffold(
+            containerColor = AppBackground,
+            topBar = { AppHeader(selectedTab.label, onProfile = { showProfile = true }) },
+            bottomBar = {
+                NavigationBar(containerColor = Color.White) {
+                    AppTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            icon = { Text(tab.mark, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+                            label = { Text(tab.label) }
+                        )
+                    }
                 }
             }
-        }
-    ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (selectedTab) {
-                AppTab.TODAY -> TodayScreen(onStartActivity = { selectedTab = AppTab.ACTIVITY })
-                AppTab.ACTIVITY -> ActivityScreen()
-                AppTab.HEALTH -> HealthScreen()
+        ) { padding ->
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                when (selectedTab) {
+                    AppTab.TODAY -> TodayScreen(onStartActivity = { selectedTab = AppTab.ACTIVITY })
+                    AppTab.ACTIVITY -> ActivityScreen()
+                    AppTab.HEALTH -> HealthScreen()
+                }
             }
         }
     }
 
-    if (showProfile) ProfileScreen(onDismiss = { showProfile = false }, onLogout = { onLogout() })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
