@@ -86,7 +86,7 @@ fun MainScaffold(onLogout: () -> Unit) {
         }
     }
 
-    if (showProfile) ProfileScreen(onDismiss = { showProfile = false }, onLogout = onLogout)
+    if (showProfile) ProfileScreen(onDismiss = { showProfile = false }, onLogout = { onLogout() })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
