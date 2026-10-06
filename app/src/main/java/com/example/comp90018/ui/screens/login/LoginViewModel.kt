@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.example.comp90018.data.SupabaseAuthRepository
+import kotlinx.coroutines.flow.collect   // optional on recent coroutines, harmless if present
+import kotlinx.coroutines.flow.update
 
 
 class LoginViewModel(
@@ -18,6 +20,14 @@ class LoginViewModel(
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repo.observeAuth().collect { loggedIn ->
+                _state.update { it.copy(loggedIn = loggedIn) }
+            }
+        }
+    }
 
     fun signIn(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
@@ -32,11 +42,7 @@ class LoginViewModel(
         }
     }
 
-    fun continueAsGuest() {
-        _state.value = LoginUiState(loggedIn = true)
-    }
-
     fun signOut() {
-        _state.value = LoginUiState()
+        viewModelScope.launch{ repo.logout() }
     }
 }

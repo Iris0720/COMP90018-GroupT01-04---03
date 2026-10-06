@@ -13,3 +13,9 @@ data class LoginUiState(
     val error: String? = null,
     val loggedIn: Boolean = false,
 )
+
+data class RegisterUiState(
+    val isRegistering: Boolean = false,
+    val error: String? = null,
+    val success: Boolean = false,
+)

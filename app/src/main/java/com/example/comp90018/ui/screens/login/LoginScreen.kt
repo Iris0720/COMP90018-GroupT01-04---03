@@ -42,11 +42,12 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 @Composable
 fun LoginScreen(
     isLoading: Boolean = false,
+    isRegistering: Boolean = false,
     errorMessage: String? = null,
+    successMessage: String? = null,
     onSignIn: (email: String, password: String) -> Unit = { _, _ -> },
-    onContinueAsGuest: () -> Unit = {},
     onForgotPassword: () -> Unit = {},
-    onCreateAccount: () -> Unit = {},
+    onCreateAccount: (email: String, password: String) -> Unit = {_, _ -> },
 ) {
     val colors = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
@@ -153,6 +154,14 @@ fun LoginScreen(
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
+            if (successMessage != null) {
+                Text(
+                    text=successMessage,
+                    style = type.bodySmall,
+                    color = colors.primary,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -170,7 +179,7 @@ fun LoginScreen(
 
             Button(
                 onClick = { onSignIn(email, password) },
-                enabled = !isLoading,
+                enabled = !isRegistering && !isLoading,
                 shape = fieldShape,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -182,7 +191,8 @@ fun LoginScreen(
             Spacer(Modifier.height(12.dp))
 
             OutlinedButton(
-                onClick = onContinueAsGuest,
+                onClick = { onCreateAccount(email, password) },
+                enabled = !isRegistering && !isLoading,
                 shape = fieldShape,
                 border = BorderStroke(1.dp, colors.outline),
                 modifier = Modifier
@@ -190,7 +200,7 @@ fun LoginScreen(
                     .height(52.dp),
             ) {
                 Text(
-                    text = "Continue as Guest",
+                    if (isRegistering) "Registering..." else "Register",
                     style = type.titleMedium,
                     color = colors.onSurface,
                 )
@@ -206,31 +216,9 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("New here?", style = type.labelLarge, color = colors.primary)
-            TextButton(onClick = onCreateAccount) {
+            TextButton(onClick = { onCreateAccount(email, password) } ) {
                 Text("Create account", style = type.labelLarge, color = colors.primary)
             }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Local-first note
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.primaryContainer, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Text(
-                text = "Local-first MVP",
-                style = type.labelLarge.copy(fontWeight = FontWeight.Bold),
-                color = colors.onPrimaryContainer,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "Guest Mode keeps routes, meals and health notes on this device.",
-                style = type.bodySmall,
-                color = colors.onSurface.copy(alpha = 0.7f),
-            )
         }
     }
 }

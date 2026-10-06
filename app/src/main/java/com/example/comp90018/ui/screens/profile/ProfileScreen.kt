@@ -9,10 +9,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun ProfileScreen(onDismiss: () -> Unit) {
+fun ProfileScreen(
+    onDismiss: () -> Unit,
+    onLogout: () -> Unit
+    ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { 
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    onLogout()
+                }
+            ) { Text("Log Out") }
+        },
         title = { Text("Profile") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

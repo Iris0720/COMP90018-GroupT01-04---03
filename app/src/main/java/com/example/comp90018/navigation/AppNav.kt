@@ -24,23 +24,32 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import com.example.comp90018.ui.screens.login.LoginScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.comp90018.ui.screens.login.LoginViewModel
+import com.example.comp90018.ui.screens.login.RegisterViewModel
 
 @Composable
 fun AppNav() {
 
-    val vm: LoginViewModel = viewModel()
-    val state by vm.state.collectAsState()
+    val loginVm: LoginViewModel = viewModel()
+    val registerVm: RegisterViewModel = viewModel()
 
-    if (state.loggedIn) {
-        MainScaffold(onLogout = { vm.signOut() })
+    val registerState by registerVm.state.collectAsState()
+    val loginState by loginVm.state.collectAsState()
+
+    if (loginState.loggedIn) {
+        MainScaffold(onLogout = { loginVm.signOut() })
     } else {
         LoginScreen(
-            isLoading = state.isLoading,
-            errorMessage = state.error,
-            onSignIn = { email, password -> vm.signIn(email, password) },
-            onContinueAsGuest = { vm.continueAsGuest() },
+            isLoading = loginState.isLoading,
+            isRegistering = registerState.isRegistering,
+            errorMessage = registerState.error ?: loginState.error,
+            successMessage = if (registerState.success) {
+                "Account created. Check your email to confirm, then sign in."
+            } else { 
+                null
+            },
+            onSignIn = { email, password -> loginVm.signIn(email, password) },
+            onCreateAccount = { email, password -> registerVm.register(email, password) },
             onForgotPassword = { /* TODO */},
-            onCreateAccount = { /* TODO  */}
         )
     }
 
@@ -77,7 +86,7 @@ fun MainScaffold(onLogout: () -> Unit) {
         }
     }
 
-    if (showProfile) ProfileScreen(onDismiss = { showProfile = false })
+    if (showProfile) ProfileScreen(onDismiss = { showProfile = false }, onLogout = onLogout)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
