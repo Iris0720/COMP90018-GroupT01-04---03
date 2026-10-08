@@ -12,7 +12,7 @@ class BackendRowsSerializationTest {
     @Test
     fun activityPayloadUsesDatabaseColumnNames() {
         val payload = json.encodeToString(
-            ActivitySessionRow(
+            ActivitySessionWriteRow(
                 id = "session-1",
                 ownerId = "user-1",
                 startedAt = "2026-10-09T10:00:00Z",
@@ -31,12 +31,14 @@ class BackendRowsSerializationTest {
         assertTrue(payload.contains("\"started_at\":\"2026-10-09T10:00:00Z\""))
         assertTrue(payload.contains("\"duration_seconds\":10"))
         assertFalse(payload.contains("ownerId"))
+        assertFalse(payload.contains("created_at"))
+        assertFalse(payload.contains("updated_at"))
     }
 
     @Test
     fun mealPayloadUsesNutritionColumnNames() {
         val payload = json.encodeToString(
-            MealEntryRow(
+            MealEntryWriteRow(
                 id = "meal-1",
                 ownerId = "user-1",
                 recordedAt = "2026-10-09T12:00:00Z",
@@ -53,5 +55,7 @@ class BackendRowsSerializationTest {
         assertTrue(payload.contains("\"protein_grams\":30"))
         assertTrue(payload.contains("\"carbohydrate_grams\":60"))
         assertTrue(payload.contains("\"source_label\":\"Manual entry\""))
+        assertFalse(payload.contains("created_at"))
+        assertFalse(payload.contains("updated_at"))
     }
 }

@@ -45,11 +45,11 @@ class SupabaseBackendRepository(
         }
 
         return withOwner { ownerId ->
-            client.from(ACTIVITY_SESSIONS).upsert(session.toRow(ownerId)) {
+            client.from(ACTIVITY_SESSIONS).upsert(session.toWriteRow(ownerId)) {
                 onConflict = "id"
             }
             if (routePoints.isNotEmpty()) {
-                client.from(ROUTE_POINTS).upsert(routePoints.map { it.toRow(ownerId) }) {
+                client.from(ROUTE_POINTS).upsert(routePoints.map { it.toWriteRow(ownerId) }) {
                     onConflict = "id"
                 }
             }
@@ -100,7 +100,7 @@ class SupabaseBackendRepository(
     override suspend fun upsertHealthCheckIn(input: HealthCheckInInput): BackendResult<Unit> {
         BackendInputValidator.health(input)?.let { return invalid(it) }
         return withOwner { ownerId ->
-            client.from(HEALTH_CHECK_INS).upsert(input.toRow(ownerId)) {
+            client.from(HEALTH_CHECK_INS).upsert(input.toWriteRow(ownerId)) {
                 onConflict = "id"
             }
             BackendResult.Success(Unit)
@@ -122,7 +122,7 @@ class SupabaseBackendRepository(
     override suspend fun upsertMeal(input: MealEntryInput): BackendResult<Unit> {
         BackendInputValidator.meal(input)?.let { return invalid(it) }
         return withOwner { ownerId ->
-            client.from(MEAL_ENTRIES).upsert(input.toRow(ownerId)) {
+            client.from(MEAL_ENTRIES).upsert(input.toWriteRow(ownerId)) {
                 onConflict = "id"
             }
             BackendResult.Success(Unit)
@@ -165,7 +165,7 @@ class SupabaseBackendRepository(
         }
     }
 
-    private fun ActivitySessionInput.toRow(ownerId: String) = ActivitySessionRow(
+    private fun ActivitySessionInput.toWriteRow(ownerId: String) = ActivitySessionWriteRow(
         id = id,
         ownerId = ownerId,
         startedAt = startedAt,
@@ -179,7 +179,7 @@ class SupabaseBackendRepository(
         steps = steps
     )
 
-    private fun RoutePointInput.toRow(ownerId: String) = RoutePointRow(
+    private fun RoutePointInput.toWriteRow(ownerId: String) = RoutePointWriteRow(
         id = id,
         ownerId = ownerId,
         sessionId = sessionId,
@@ -193,7 +193,7 @@ class SupabaseBackendRepository(
         speedMetresPerSecond = speedMetresPerSecond
     )
 
-    private fun HealthCheckInInput.toRow(ownerId: String) = HealthCheckInRow(
+    private fun HealthCheckInInput.toWriteRow(ownerId: String) = HealthCheckInWriteRow(
         id = id,
         ownerId = ownerId,
         recordedAt = recordedAt,
@@ -203,7 +203,7 @@ class SupabaseBackendRepository(
         condition = condition
     )
 
-    private fun MealEntryInput.toRow(ownerId: String) = MealEntryRow(
+    private fun MealEntryInput.toWriteRow(ownerId: String) = MealEntryWriteRow(
         id = id,
         ownerId = ownerId,
         recordedAt = recordedAt,
