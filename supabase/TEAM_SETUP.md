@@ -25,6 +25,8 @@ SUPABASE_PUBLISHABLE_KEY=replace-with-the-shared-publishable-key
 ```
 
 Do not commit `local.properties`. The repository already ignores it.
+`local.properties.example` contains the exact property names and a safe
+placeholder that can be copied without exposing a real key.
 
 ## 3. Repository boundary
 
@@ -33,6 +35,10 @@ Do not commit `local.properties`. The repository already ignores it.
 - The authenticated session supplies `owner_id`; the UI must never allow a user to choose it.
 - Use the same client-generated UUID in Room and Supabase so retries can upsert without duplicates.
 - Room remains the immediate local source for offline use; network failures must not block the core activity or health flow.
+- Use `BackendRepository` from `data/remote`; do not call PostgREST directly
+  from a screen or ViewModel.
+
+See `INTEGRATION_GUIDE.md` for concrete activity, health and meal examples.
 
 ## 4. Feature mapping
 

@@ -88,6 +88,8 @@ Registration should send `display_name` as signup metadata so the database trigg
 - Commit a placeholder/example configuration only. Never commit real secret or service-role keys.
 
 See `TEAM_SETUP.md` for teammate onboarding and repository boundaries.
+See `INTEGRATION_GUIDE.md` for the implemented repository API and copyable
+feature-team examples.
 
 ## Acceptance checks
 

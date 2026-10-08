@@ -1,0 +1,5 @@
+# Copy these two lines into the existing untracked local.properties file.
+# The publishable key is safe for a mobile client only because every table is
+# protected by Row Level Security. Never put a service_role key in this file.
+SUPABASE_URL=https://zuhcgdlfomrdlsjcshrw.supabase.co
+SUPABASE_PUBLISHABLE_KEY=replace-with-shared-publishable-key
