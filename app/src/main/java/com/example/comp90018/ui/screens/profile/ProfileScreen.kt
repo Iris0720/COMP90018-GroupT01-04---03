@@ -66,7 +66,15 @@ private fun PermissionRow(type: PermissionType, permissions: PermissionControlle
         Text(type.purpose.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall)
         Text(stateLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
         when (status) {
-            is PermissionStatus.Granted -> Unit
+            is PermissionStatus.Granted -> {
+                if (status.detail != "Not required on this Android version") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { permissions.openSettings(type, status) }) {
+                            Text("Change permission")
+                        }
+                    }
+                }
+            }
             is PermissionStatus.Denied -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = {
                     if (status.canAskAgain) permissions.requestPermission(type) {}
