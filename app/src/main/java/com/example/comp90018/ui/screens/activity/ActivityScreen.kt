@@ -39,10 +39,17 @@ fun ActivityScreen(permissions: PermissionController) {
         permissions.requestPermission(PermissionType.ACTIVITY_RECOGNITION) { state = SessionState.LIVE }
     }
 
+    fun requestStart() {
+        locationAttempted = true
+        permissions.requestPermission(PermissionType.LOCATION) { result ->
+            if (result is PermissionStatus.Granted) startAfterLocationPermission()
+        }
+    }
+
     when (state) {
         SessionState.SETUP -> Page {
             Text("Move outside", style = MaterialTheme.typography.headlineLarge)
-            Text("Choose an activity and a simple target. Tracking works offline.", color = MaterialTheme.colorScheme.secondary)
+            Text("Choose an activity and a simple target. This branch uses demo activity metrics.", color = MaterialTheme.colorScheme.secondary)
             Text("Location is used while tracking your route. Step counting is optional; you can continue without it.", color = MaterialTheme.colorScheme.secondary)
             SectionTitle("Activity type")
             ChoiceRow(listOf("Walking", "Running", "Hiking"), activity) { activity = it }
@@ -57,7 +64,7 @@ fun ActivityScreen(permissions: PermissionController) {
                 PermissionStatusCard(
                     permission = PermissionType.LOCATION,
                     status = permissions.status(PermissionType.LOCATION),
-                    onRetry = { permissions.requestPermission(PermissionType.LOCATION) {} },
+                    onRetry = { requestStart() },
                     onSettings = { permissions.openSettings(PermissionType.LOCATION, permissions.status(PermissionType.LOCATION)) }
                 )
             }
@@ -70,10 +77,10 @@ fun ActivityScreen(permissions: PermissionController) {
                 )
             }
             PrimaryButton("Start $activity") {
-                locationAttempted = true
-                permissions.requestPermission(PermissionType.LOCATION) { result ->
-                    if (result is PermissionStatus.Granted) startAfterLocationPermission()
-                }
+                requestStart()
+            }
+            OutlinedButton(onClick = { state = SessionState.LIVE }, modifier = Modifier.fillMaxWidth()) {
+                Text("Continue with demo (no permissions)")
             }
             OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("View training history") }
         }

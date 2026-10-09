@@ -42,6 +42,7 @@ fun ProfileScreen(permissions: PermissionController, onDismiss: () -> Unit) {
                 PermissionRow(PermissionType.LOCATION, permissions)
                 PermissionRow(PermissionType.ACTIVITY_RECOGNITION, permissions)
                 PermissionRow(PermissionType.CAMERA, permissions)
+                PermissionRow(PermissionType.NOTIFICATIONS, permissions)
                 Text(
                     "Permissions are requested only when you use the feature that needs them. Activity and health data stays on this device by default.",
                     fontSize = 12.sp,

@@ -23,7 +23,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
@@ -35,7 +35,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 enum class PermissionType(val title: String, val purpose: String) {
     LOCATION("Location", "record your route and calculate distance while an activity is running"),
     ACTIVITY_RECOGNITION("Activity recognition", "read step counts during an activity"),
-    CAMERA("Camera", "take a photo to estimate meal nutrition")
+    CAMERA("Camera", "take a photo to estimate meal nutrition"),
+    NOTIFICATIONS("Notifications", "show optional activity updates")
 }
 
 sealed interface PermissionStatus {
@@ -63,6 +64,11 @@ class PermissionManager(context: Context) {
     fun read(type: PermissionType): PermissionStatus {
         unavailableReason(type)?.let { return it }
         val permissions = permissionsFor(type)
+        if (type == PermissionType.NOTIFICATIONS &&
+            (permissions.isEmpty() || permissions.all {
+                ContextCompat.checkSelfPermission(appContext, it) == PackageManager.PERMISSION_GRANTED
+            }) && !NotificationManagerCompat.from(appContext).areNotificationsEnabled()
+        ) return PermissionStatus.Denied(canAskAgain = false)
         if (permissions.isEmpty()) return PermissionStatus.Granted("Not required on this Android version")
 
         val grantedPermissions = permissions.filter { permission ->
@@ -92,6 +98,9 @@ class PermissionManager(context: Context) {
             arrayOf(Manifest.permission.ACTIVITY_RECOGNITION)
         } else emptyArray()
         PermissionType.CAMERA -> arrayOf(Manifest.permission.CAMERA)
+        PermissionType.NOTIFICATIONS -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS)
+        } else emptyArray()
     }
 
     internal fun markRequestStarted(type: PermissionType) {
@@ -129,6 +138,7 @@ class PermissionManager(context: Context) {
                 PermissionStatus.Unavailable("This device does not provide a step counter.")
             } else null
         }
+        PermissionType.NOTIFICATIONS -> null
         PermissionType.CAMERA -> if (!appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
             PermissionStatus.Unavailable("This device does not have a camera.")
         } else null
@@ -171,24 +181,24 @@ fun rememberPermissionController(): PermissionController {
     val context = androidx.compose.ui.platform.LocalContext.current
     val manager = remember(context) { PermissionManager(context) }
     val statuses = remember(manager) { mutableStateOf(PermissionType.entries.associateWith(manager::read)) }
-    var pendingPermission by remember { mutableStateOf<PermissionType?>(null) }
-    var pendingCallback by remember { mutableStateOf<((PermissionStatus) -> Unit)?>(null) }
+    val pending = remember(manager) { PendingRequest<PermissionType, PermissionStatus>() }
     var rationalePermission by remember { mutableStateOf<PermissionType?>(null) }
-    val latestPendingCallback by rememberUpdatedState(pendingCallback)
-    val latestPendingPermission by rememberUpdatedState(pendingPermission)
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        val type = latestPendingPermission ?: return@rememberLauncherForActivityResult
+    fun completePending() {
+        val type = pending.type ?: return
         val result = manager.read(type)
         if (result is PermissionStatus.Granted) manager.recordGranted(type)
         statuses.value = statuses.value + (type to result)
-        latestPendingCallback?.invoke(result)
-        pendingPermission = null
-        pendingCallback = null
+        rationalePermission = null
+        pending.complete(result)
+    }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        completePending()
     }
 
     fun launchPendingRequest() {
-        val type = pendingPermission ?: return
+        val type = pending.type ?: return
         manager.markRequestStarted(type)
         launcher.launch(manager.permissionsFor(type))
         rationalePermission = null
@@ -224,9 +234,9 @@ fun rememberPermissionController(): PermissionController {
                             statuses.value = statuses.value + (type to result)
                             onResult(result)
                         } else {
-                            pendingPermission = type
-                            pendingCallback = onResult
-                            if (manager.shouldExplain(type)) {
+                            if (!pending.begin(type, onResult)) {
+                                onResult(PermissionStatus.Unavailable("Another permission request is in progress. Please try again."))
+                            } else if (manager.shouldExplain(type)) {
                                 rationalePermission = type
                             } else {
                                 launchPendingRequest()
@@ -236,8 +246,10 @@ fun rememberPermissionController(): PermissionController {
                 }
             }
         },
-        settingsAction = { _, status ->
+        settingsAction = { type, status ->
             val intent = when {
+                type == PermissionType.NOTIFICATIONS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                 status is PermissionStatus.Unavailable && status.settingsTarget == SettingsTarget.LOCATION ->
                     Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                 else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -251,9 +263,7 @@ fun rememberPermissionController(): PermissionController {
     rationalePermission?.let { type ->
         AlertDialog(
             onDismissRequest = {
-                rationalePermission = null
-                pendingPermission = null
-                pendingCallback = null
+                completePending()
             },
             title = { Text("Allow ${type.title.lowercase()}?") },
             text = { Text("Trailwise needs this permission to ${type.purpose}. You can continue without it, but this feature may be limited.") },
@@ -262,9 +272,7 @@ fun rememberPermissionController(): PermissionController {
             },
             dismissButton = {
                 TextButton(onClick = {
-                    rationalePermission = null
-                    pendingPermission = null
-                    pendingCallback = null
+                    completePending()
                 }) { Text("Not now") }
             },
             properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
