@@ -1,9 +1,8 @@
 package com.example.comp90018.ui.screens.health
 
 import android.app.Activity
-import android.content.ContentValues
-import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.camera.core.CameraSelector
@@ -45,12 +44,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.comp90018.ui.theme.TrailwiseTheme
+import java.io.File
+
+private const val CAMERA_TAG = "MealCamera"
 
 class MealCameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val outputUri = intent.getStringExtra(EXTRA_OUTPUT_URI)?.let(Uri::parse)
-        if (outputUri == null) {
+        val outputPath = intent.getStringExtra(EXTRA_OUTPUT_PATH)
+        if (outputPath.isNullOrBlank()) {
             finishWithResult(Activity.RESULT_CANCELED)
             return
         }
@@ -58,7 +60,7 @@ class MealCameraActivity : ComponentActivity() {
         setContent {
             TrailwiseTheme {
                 MealCameraScreen(
-                    outputUri = outputUri,
+                    outputFile = File(outputPath),
                     onClose = { finishWithResult(Activity.RESULT_CANCELED) },
                     onCaptured = { finishWithResult(Activity.RESULT_OK) }
                 )
@@ -72,13 +74,13 @@ class MealCameraActivity : ComponentActivity() {
     }
 
     companion object {
-        const val EXTRA_OUTPUT_URI = "meal_output_uri"
+        const val EXTRA_OUTPUT_PATH = "meal_output_path"
     }
 }
 
 @Composable
 private fun MealCameraScreen(
-    outputUri: Uri,
+    outputFile: File,
     onClose: () -> Unit,
     onCaptured: () -> Unit
 ) {
@@ -156,11 +158,8 @@ private fun MealCameraScreen(
                     val capture = imageCapture ?: return@Button
                     capturing = true
                     previewView.display?.rotation?.let { capture.targetRotation = it }
-                    val output = ImageCapture.OutputFileOptions.Builder(
-                        context.contentResolver,
-                        outputUri,
-                        ContentValues()
-                    ).build()
+                    outputFile.parentFile?.mkdirs()
+                    val output = ImageCapture.OutputFileOptions.Builder(outputFile).build()
                     capture.takePicture(
                         output,
                         executor,
@@ -172,6 +171,7 @@ private fun MealCameraScreen(
 
                             override fun onError(exception: ImageCaptureException) {
                                 capturing = false
+                                Log.e(CAMERA_TAG, "Photo save failed", exception)
                                 cameraError = "Photo could not be saved. Please try again."
                             }
                         }

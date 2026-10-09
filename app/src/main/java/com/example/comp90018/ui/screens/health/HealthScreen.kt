@@ -84,11 +84,11 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
         permissions.requestPermission(PermissionType.CAMERA) { permissionStatus ->
             if (permissionStatus is PermissionStatus.Granted) {
                 try {
-                    val photoUri = createMealPhotoUri(context)
-                    pendingPhotoUri = photoUri.toString()
+                    val photoTarget = createMealPhotoTarget(context)
+                    pendingPhotoUri = photoTarget.uri.toString()
                     cameraLauncher.launch(
                         Intent(context, MealCameraActivity::class.java)
-                            .putExtra(MealCameraActivity.EXTRA_OUTPUT_URI, photoUri.toString())
+                            .putExtra(MealCameraActivity.EXTRA_OUTPUT_PATH, photoTarget.file.absolutePath)
                     )
                 } catch (_: Exception) {
                     pendingPhotoUri = null
@@ -296,8 +296,11 @@ private fun InfoCard(color: Color, content: @Composable ColumnScope.() -> Unit) 
     )
 }
 
-private fun createMealPhotoUri(context: Context): Uri {
+private data class MealPhotoTarget(val file: File, val uri: Uri)
+
+private fun createMealPhotoTarget(context: Context): MealPhotoTarget {
     val directory = File(context.cacheDir, "meal_photos").apply { mkdirs() }
     val photo = File.createTempFile("meal_", ".jpg", directory)
-    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo)
+    return MealPhotoTarget(photo, uri)
 }
