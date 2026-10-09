@@ -11,7 +11,7 @@ internal object BackendInputValidator {
     }
 
     fun activity(input: ActivitySessionInput): String? = when {
-        input.id.isBlank() -> "Activity id is required."
+        !isUuid(input.id) -> "Activity id must be a UUID."
         !isTimestamp(input.startedAt) -> "Activity start time must be an ISO-8601 timestamp."
         input.finishedAt != null && !isTimestamp(input.finishedAt) ->
             "Activity finish time must be an ISO-8601 timestamp."
@@ -28,20 +28,23 @@ internal object BackendInputValidator {
     }
 
     fun routePoint(input: RoutePointInput, expectedSessionId: String): String? = when {
-        input.id.isBlank() -> "Route point id is required."
+        !isUuid(input.id) -> "Route point id must be a UUID."
         input.sessionId != expectedSessionId -> "Route point belongs to a different session."
+        !isUuid(input.sessionId) -> "Session id must be a UUID."
         input.segmentNumber < 0 -> "Route segment number cannot be negative."
         input.sequenceNumber < 0 -> "Route sequence number cannot be negative."
         !isTimestamp(input.recordedAt) -> "Route time must be an ISO-8601 timestamp."
         input.latitude !in -90.0..90.0 -> "Latitude is outside -90..90."
         input.longitude !in -180.0..180.0 -> "Longitude is outside -180..180."
+        listOfNotNull(input.accuracyMetres, input.altitudeMetres, input.speedMetresPerSecond)
+            .any { !it.isFinite() } -> "Sensor values must be finite."
         input.accuracyMetres != null && input.accuracyMetres < 0 -> "Accuracy cannot be negative."
         input.speedMetresPerSecond != null && input.speedMetresPerSecond < 0 -> "Speed cannot be negative."
         else -> null
     }
 
     fun health(input: HealthCheckInInput): String? = when {
-        input.id.isBlank() -> "Health check-in id is required."
+        !isUuid(input.id) -> "Health check-in id must be a UUID."
         !isTimestamp(input.recordedAt) -> "Check-in time must be an ISO-8601 timestamp."
         input.feeling !in BackendValues.feelings -> "Unsupported feeling value."
         input.breathingDifficulty !in BackendValues.symptomLevels -> "Unsupported breathing value."
@@ -51,7 +54,7 @@ internal object BackendInputValidator {
     }
 
     fun meal(input: MealEntryInput): String? = when {
-        input.id.isBlank() -> "Meal id is required."
+        !isUuid(input.id) -> "Meal id must be a UUID."
         !isTimestamp(input.recordedAt) -> "Meal time must be an ISO-8601 timestamp."
         input.name.isBlank() || input.name.length > 160 -> "Meal name must contain 1 to 160 characters."
         input.serving.isBlank() || input.serving.length > 160 -> "Serving must contain 1 to 160 characters."
@@ -66,4 +69,7 @@ internal object BackendInputValidator {
     }
 
     private fun isTimestamp(value: String): Boolean = runCatching { Instant.parse(value) }.isSuccess
+
+    fun isUuid(value: String): Boolean = UUID_PATTERN.matches(value)
+    private val UUID_PATTERN = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 }

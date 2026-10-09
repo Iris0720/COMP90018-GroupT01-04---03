@@ -4,11 +4,14 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.exceptions.RestException
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 
 class SupabaseBackendRepository(
-    private val client: SupabaseClient = SupabaseClientProvider.client
+    suppliedClient: SupabaseClient? = null
 ) : BackendRepository {
+    private val client by lazy { suppliedClient ?: SupabaseClientProvider.client }
 
     override suspend fun getProfile(): BackendResult<ProfileRow> = withOwner { ownerId ->
         val profile = client.from(PROFILES).select {
@@ -31,7 +34,12 @@ class SupabaseBackendRepository(
             ) {
                 filter { eq("id", ownerId) }
             }
-            getProfile()
+            val row = client.from(PROFILES).select {
+                filter { eq("id", ownerId) }
+                limit(1)
+            }.decodeSingleOrNull<ProfileRow>()
+            if (row == null) BackendResult.Failure(notFound("Profile not found."))
+            else BackendResult.Success(row)
         }
     }
 
@@ -43,13 +51,17 @@ class SupabaseBackendRepository(
         routePoints.forEach { point ->
             BackendInputValidator.routePoint(point, session.id)?.let { return invalid(it) }
         }
+        if (routePoints.distinctBy { it.id }.size != routePoints.size ||
+            routePoints.distinctBy { it.segmentNumber to it.sequenceNumber }.size != routePoints.size) {
+            return invalid("Route points must have unique ids and segment/sequence pairs.")
+        }
 
         return withOwner { ownerId ->
             client.from(ACTIVITY_SESSIONS).upsert(session.toWriteRow(ownerId)) {
                 onConflict = "id"
             }
-            if (routePoints.isNotEmpty()) {
-                client.from(ROUTE_POINTS).upsert(routePoints.map { it.toWriteRow(ownerId) }) {
+            for (batch in routePoints.chunked(500)) {
+                client.from(ROUTE_POINTS).upsert(batch.map { it.toWriteRow(ownerId) }) {
                     onConflict = "id"
                 }
             }
@@ -70,22 +82,29 @@ class SupabaseBackendRepository(
     }
 
     override suspend fun getRoutePoints(sessionId: String): BackendResult<List<RoutePointRow>> {
-        if (sessionId.isBlank()) return invalid("Session id is required.")
+        if (!BackendInputValidator.isUuid(sessionId)) return invalid("Session id must be a UUID.")
         return withOwner { ownerId ->
-            val rows = client.from(ROUTE_POINTS).select {
-                filter {
-                    eq("owner_id", ownerId)
-                    eq("session_id", sessionId)
-                }
-                order("segment_number", Order.ASCENDING)
-                order("sequence_number", Order.ASCENDING)
-            }.decodeList<RoutePointRow>()
+            val rows = mutableListOf<RoutePointRow>()
+            var offset = 0L
+            do {
+                val page = client.from(ROUTE_POINTS).select {
+                    filter {
+                        eq("owner_id", ownerId)
+                        eq("session_id", sessionId)
+                    }
+                    order("segment_number", Order.ASCENDING)
+                    order("sequence_number", Order.ASCENDING)
+                    range(offset, offset + 199)
+                }.decodeList<RoutePointRow>()
+                rows.addAll(page)
+                offset += page.size
+            } while (page.size == 200)
             BackendResult.Success(rows)
         }
     }
 
     override suspend fun deleteActivity(sessionId: String): BackendResult<Unit> {
-        if (sessionId.isBlank()) return invalid("Session id is required.")
+        if (!BackendInputValidator.isUuid(sessionId)) return invalid("Session id must be a UUID.")
         return withOwner { ownerId ->
             client.from(ACTIVITY_SESSIONS).delete {
                 filter {
@@ -147,9 +166,11 @@ class SupabaseBackendRepository(
         val ownerId = try {
             // Auth restores a persisted session asynchronously after process start.
             // Waiting here avoids reporting a false signed-out state during startup.
-            client.auth.awaitInitialization()
+            if (client.auth.config.autoLoadFromStorage) client.auth.awaitInitialization()
             client.auth.currentUserOrNull()?.id
-        } catch (error: Throwable) {
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
             return BackendResult.Failure(error.toBackendError())
         } ?: return BackendResult.Failure(
                 BackendError(
@@ -160,7 +181,9 @@ class SupabaseBackendRepository(
             )
         return try {
             block(ownerId)
-        } catch (error: Throwable) {
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
             BackendResult.Failure(error.toBackendError())
         }
     }
@@ -220,10 +243,14 @@ class SupabaseBackendRepository(
     private fun Throwable.toBackendError(): BackendError {
         val readableMessage = message ?: "Remote backend request failed."
         return when {
-            this is IOException -> BackendError(BackendErrorKind.NETWORK, readableMessage, true)
+            this is IOException -> BackendError(BackendErrorKind.NETWORK, "Network request failed. Please retry when connected.", true)
             this is IllegalStateException && readableMessage.contains("SUPABASE_") ->
                 BackendError(BackendErrorKind.CONFIGURATION, readableMessage, false)
-            else -> BackendError(BackendErrorKind.REMOTE, readableMessage, true)
+            this is RestException && statusCode == 401 ->
+                BackendError(BackendErrorKind.SIGNED_OUT, "Your session is no longer valid. Please sign in again.", false)
+            this is RestException && (statusCode == 429 || statusCode in 500..599) ->
+                BackendError(BackendErrorKind.REMOTE, "Cloud service temporarily unavailable. Retry later.", true)
+            else -> BackendError(BackendErrorKind.REMOTE, "Cloud request failed. Check your session and input before retrying.", false)
         }
     }
 

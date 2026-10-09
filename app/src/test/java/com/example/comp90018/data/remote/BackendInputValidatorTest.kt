@@ -6,6 +6,18 @@ import org.junit.Test
 
 class BackendInputValidatorTest {
     @Test
+    fun malformedDatabaseIdsAreRejectedBeforeNetwork() {
+        assertEquals("Activity id must be a UUID.", BackendInputValidator.activity(validActivity().copy(id = "session-1")))
+        assertEquals(false, BackendInputValidator.isUuid("1-1-1-1-1"))
+    }
+
+    @Test
+    fun nonFiniteSensorValuesAreRejected() {
+        val point = validPoint(validActivity().id).copy(altitudeMetres = Float.NaN)
+        assertEquals("Sensor values must be finite.", BackendInputValidator.routePoint(point, validActivity().id))
+    }
+
+    @Test
     fun validActivityAndRouteAreAccepted() {
         val activity = validActivity()
         val point = validPoint(activity.id)
@@ -25,7 +37,7 @@ class BackendInputValidatorTest {
 
     @Test
     fun routeCannotBeAttachedToAnotherSession() {
-        val error = BackendInputValidator.routePoint(validPoint("session-b"), "session-a")
+        val error = BackendInputValidator.routePoint(validPoint("00000000-0000-0000-0000-000000000002"), "00000000-0000-0000-0000-000000000001")
 
         assertEquals("Route point belongs to a different session.", error)
     }
@@ -45,7 +57,7 @@ class BackendInputValidatorTest {
     @Test
     fun incompleteHealthValuesAreRejected() {
         val input = HealthCheckInInput(
-            id = "health-1",
+            id = "00000000-0000-0000-0000-000000000001",
             recordedAt = "2026-10-09T10:00:00Z",
             feeling = "great",
             breathingDifficulty = "none",
@@ -59,7 +71,7 @@ class BackendInputValidatorTest {
     @Test
     fun negativeMealNutritionIsRejected() {
         val input = MealEntryInput(
-            id = "meal-1",
+            id = "00000000-0000-0000-0000-000000000001",
             recordedAt = "2026-10-09T10:00:00Z",
             name = "Rice bowl",
             serving = "1 bowl",
@@ -73,7 +85,7 @@ class BackendInputValidatorTest {
     }
 
     private fun validActivity() = ActivitySessionInput(
-        id = "session-1",
+        id = "00000000-0000-0000-0000-000000000001",
         startedAt = "2026-10-09T10:00:00Z",
         finishedAt = "2026-10-09T10:30:00Z",
         activityType = "walking",
@@ -83,7 +95,7 @@ class BackendInputValidatorTest {
     )
 
     private fun validPoint(sessionId: String) = RoutePointInput(
-        id = "point-1",
+        id = "00000000-0000-0000-0000-000000000002",
         sessionId = sessionId,
         segmentNumber = 0,
         sequenceNumber = 0,
