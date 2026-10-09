@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,7 +26,7 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 @Composable
 fun AppNav() {
     val permissions = rememberPermissionController()
-    var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
 
     Scaffold(

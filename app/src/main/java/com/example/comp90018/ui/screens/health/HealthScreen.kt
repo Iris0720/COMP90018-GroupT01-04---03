@@ -1,6 +1,8 @@
 package com.example.comp90018.ui.screens.health
 
 import android.content.Context
+import android.content.Intent
+import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,10 +69,10 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
             analysingPhoto = false
         }
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val photoUri = pendingPhotoUri?.let(Uri::parse)
         pendingPhotoUri = null
-        if (captured && photoUri != null) {
+        if (result.resultCode == Activity.RESULT_OK && photoUri != null) {
             estimatePhoto(photoUri)
         } else {
             mealMessage = "Photo capture was cancelled. Choose another photo or enter the meal manually."
@@ -84,7 +86,10 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
                 try {
                     val photoUri = createMealPhotoUri(context)
                     pendingPhotoUri = photoUri.toString()
-                    cameraLauncher.launch(photoUri)
+                    cameraLauncher.launch(
+                        Intent(context, MealCameraActivity::class.java)
+                            .putExtra(MealCameraActivity.EXTRA_OUTPUT_URI, photoUri.toString())
+                    )
                 } catch (_: Exception) {
                     pendingPhotoUri = null
                     mealMessage = "Camera could not be opened. Choose a photo or enter the meal manually."
