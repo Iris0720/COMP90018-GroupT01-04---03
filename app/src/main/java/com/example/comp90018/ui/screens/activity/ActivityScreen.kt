@@ -14,6 +14,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.comp90018.model.SessionState
+import com.example.comp90018.permissions.PermissionController
+import com.example.comp90018.permissions.PermissionStatus
+import com.example.comp90018.permissions.PermissionStatusCard
+import com.example.comp90018.permissions.PermissionType
 import com.example.comp90018.ui.components.MetricCard
 import com.example.comp90018.ui.components.PrimaryButton
 import com.example.comp90018.ui.theme.Forest
@@ -22,15 +26,31 @@ import com.example.comp90018.ui.theme.Mint
 import com.example.comp90018.ui.theme.Sand
 
 @Composable
-fun ActivityScreen() {
+fun ActivityScreen(permissions: PermissionController) {
     var state by remember { mutableStateOf(SessionState.SETUP) }
     var activity by remember { mutableStateOf("Walking") }
     var target by remember { mutableStateOf("30 min") }
+    var locationAttempted by remember { mutableStateOf(false) }
+    var stepPermissionAttempted by remember { mutableStateOf(false) }
+
+    fun startAfterLocationPermission() {
+        stepPermissionAttempted = true
+        // Step counting is optional for starting a route; continue in a degraded mode if denied.
+        permissions.requestPermission(PermissionType.ACTIVITY_RECOGNITION) { state = SessionState.LIVE }
+    }
+
+    fun requestStart() {
+        locationAttempted = true
+        permissions.requestPermission(PermissionType.LOCATION) { result ->
+            if (result is PermissionStatus.Granted) startAfterLocationPermission()
+        }
+    }
 
     when (state) {
         SessionState.SETUP -> Page {
             Text("Move outside", style = MaterialTheme.typography.headlineLarge)
-            Text("Choose an activity and a simple target. Tracking works offline.", color = MaterialTheme.colorScheme.secondary)
+            Text("Choose an activity and a simple target. This branch uses demo activity metrics.", color = MaterialTheme.colorScheme.secondary)
+            Text("Location is used while tracking your route. Step counting is optional; you can continue without it.", color = MaterialTheme.colorScheme.secondary)
             SectionTitle("Activity type")
             ChoiceRow(listOf("Walking", "Running", "Hiking"), activity) { activity = it }
             SectionTitle("Target")
@@ -40,12 +60,38 @@ fun ActivityScreen() {
                 Text("$activity · $target", color = ForestDark)
                 Text("GPS, pace and step placeholders are ready to connect to a tracking ViewModel.")
             }
-            PrimaryButton("Start $activity") { state = SessionState.LIVE }
+            if (locationAttempted && permissions.status(PermissionType.LOCATION) !is PermissionStatus.Granted) {
+                PermissionStatusCard(
+                    permission = PermissionType.LOCATION,
+                    status = permissions.status(PermissionType.LOCATION),
+                    onRetry = { requestStart() },
+                    onSettings = { permissions.openSettings(PermissionType.LOCATION, permissions.status(PermissionType.LOCATION)) }
+                )
+            }
+            if (stepPermissionAttempted && permissions.status(PermissionType.ACTIVITY_RECOGNITION) !is PermissionStatus.Granted) {
+                PermissionStatusCard(
+                    permission = PermissionType.ACTIVITY_RECOGNITION,
+                    status = permissions.status(PermissionType.ACTIVITY_RECOGNITION),
+                    onRetry = { permissions.requestPermission(PermissionType.ACTIVITY_RECOGNITION) {} },
+                    onSettings = { permissions.openSettings(PermissionType.ACTIVITY_RECOGNITION, permissions.status(PermissionType.ACTIVITY_RECOGNITION)) }
+                )
+            }
+            PrimaryButton("Start $activity") {
+                requestStart()
+            }
+            OutlinedButton(onClick = { state = SessionState.LIVE }, modifier = Modifier.fillMaxWidth()) {
+                Text("Continue with demo (no permissions)")
+            }
             OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("View training history") }
         }
         SessionState.LIVE, SessionState.PAUSED -> LiveActivity(
             activity = activity,
             paused = state == SessionState.PAUSED,
+            stepPermission = if (stepPermissionAttempted) permissions.status(PermissionType.ACTIVITY_RECOGNITION) else null,
+            onRetrySteps = { permissions.requestPermission(PermissionType.ACTIVITY_RECOGNITION) {} },
+            onOpenStepSettings = {
+                permissions.openSettings(PermissionType.ACTIVITY_RECOGNITION, permissions.status(PermissionType.ACTIVITY_RECOGNITION))
+            },
             onPause = { state = if (state == SessionState.PAUSED) SessionState.LIVE else SessionState.PAUSED },
             onFinish = { state = SessionState.COMPLETE }
         )
@@ -54,9 +100,25 @@ fun ActivityScreen() {
 }
 
 @Composable
-private fun LiveActivity(activity: String, paused: Boolean, onPause: () -> Unit, onFinish: () -> Unit) = Page {
+private fun LiveActivity(
+    activity: String,
+    paused: Boolean,
+    stepPermission: PermissionStatus?,
+    onRetrySteps: () -> Unit,
+    onOpenStepSettings: () -> Unit,
+    onPause: () -> Unit,
+    onFinish: () -> Unit
+) = Page {
     Text(if (paused) "Activity paused" else activity, style = MaterialTheme.typography.headlineLarge)
     Text(if (paused) "Take your time. Your session is safe." else "GPS signal ready · Tracking locally", color = MaterialTheme.colorScheme.secondary)
+    if (stepPermission != null && stepPermission !is PermissionStatus.Granted) {
+        PermissionStatusCard(
+            permission = PermissionType.ACTIVITY_RECOGNITION,
+            status = stepPermission,
+            onRetry = onRetrySteps,
+            onSettings = onOpenStepSettings
+        )
+    }
     Box(
         Modifier.fillMaxWidth().height(190.dp).background(if (paused) Sand else Mint, RoundedCornerShape(24.dp)),
         contentAlignment = Alignment.Center
