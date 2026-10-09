@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <files-path name="meal_photos" path="permission-meal-photos/" />
+    <cache-path
+        name="meal_photos"
+        path="meal_photos/" />
 </paths>
