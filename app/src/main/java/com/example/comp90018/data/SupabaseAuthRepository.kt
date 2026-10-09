@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import io.github.jan.supabase.auth.status.SessionStatus
-
 class SupabaseAuthRepository(
     private val client: SupabaseClient = SupabaseProvider.client
 ) : UserLoginRepository {
@@ -35,7 +34,10 @@ class SupabaseAuthRepository(
     override suspend fun logout(): Result<Unit> = runCatching {
         client.auth.signOut();
     }
-    
 
+    override suspend fun getUserId(): String {
+        return client.auth.currentUserOrNull()?.id
+            ?: throw IllegalStateException("No authenticated user")
+    }
     
 }

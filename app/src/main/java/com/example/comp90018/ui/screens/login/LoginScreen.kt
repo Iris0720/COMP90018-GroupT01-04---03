@@ -53,8 +53,10 @@ fun LoginScreen(
     val type = MaterialTheme.typography
     val fieldShape = RoundedCornerShape(14.dp)
 
+    var displayName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
 
     Column(
         modifier = Modifier
@@ -114,7 +116,7 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Sign in to continue, or use Guest Mode for a local demo.",
+                text = "Sign in to continue",
                 style = type.bodySmall,
                 color = colors.onSurface.copy(alpha = 0.7f),
             )
@@ -208,18 +210,6 @@ fun LoginScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-
-        // Create account
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("New here?", style = type.labelLarge, color = colors.primary)
-            TextButton(onClick = { onCreateAccount(email, password) } ) {
-                Text("Create account", style = type.labelLarge, color = colors.primary)
-            }
-        }
     }
 }
 

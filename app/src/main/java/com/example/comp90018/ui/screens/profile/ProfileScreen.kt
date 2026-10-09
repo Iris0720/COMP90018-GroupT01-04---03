@@ -48,7 +48,7 @@ private val SandText = Color(0xFF8A5A00)
 fun ProfileScreen(
     initialName: String = "Alex",
     initialStepGoal: Int = 10_000,
-    initialUnits: String = "Metric",
+    initialUnits: String = "metric",
     healthNote: String = "Prefer moderate-intensity outdoor sessions.",
     locationAllowed: Boolean = true,
     cameraAllowed: Boolean = true,
@@ -151,7 +151,7 @@ fun ProfileScreen(
                     style = fieldStyle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { units = if (units == "Metric") "Imperial" else "Metric" },
+                        .clickable { units = if (units == "metric") "imperial" else "metric" },
                 )
             }
         }
@@ -226,7 +226,8 @@ fun ProfileScreen(
         // Save button (uses the theme's primary / onPrimary by default)
         Button(
             onClick = {
-                onSave(name.trim(), stepGoalText.toIntOrNull() ?: initialStepGoal, units)
+                val goal = stepGoalText.toIntOrNull() ?: initialStepGoal
+                onSave(name.trim(), goal, units)
             },
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier

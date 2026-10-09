@@ -8,4 +8,6 @@ interface UserLoginRepository {
 
     fun observeAuth(): Flow<Boolean>
     suspend fun logout(): Result<Unit>
+
+    suspend fun getUserId(): String
 }
