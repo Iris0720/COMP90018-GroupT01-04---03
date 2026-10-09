@@ -37,12 +37,24 @@ Login is required. Optional features are included now and can be removed later.
 
 ## 4. Storage, History and Analysis
 
-- Define shared data models and account-scoped Room storage.
-- Save/read activities and health check-ins after app restart.
+**Owner:** Huanyu Zhang (Henry)
+
+### Required
+
+- Define shared data models for activity records and health check-ins.
+- Implement account-scoped Room storage. Every query and write must use the signed-in user's `ownerId`.
+- Save and read activities and health check-ins after app restart.
 - Build History with Week, Month, Year and All filters.
-- Show activity totals, health-record counts, trends and period comparisons.
-- Test date boundaries, duplicate saves and missing/zero comparison data.
-- Meal storage, cloud sync and data export.
+- Show activity totals, health-record counts, history, trends and previous-period comparisons.
+- Handle duplicate saves, date boundaries, time zones, missing data and zero comparison baselines.
+- Provide loading, empty, success and retryable error states to consuming UI.
+- Add unit and database tests for storage, reporting and account isolation.
+
+### Optional
+
+- Meal storage.
+- Cloud sync.
+- Data export.
 
 ## 5. Health and Meals
 
@@ -74,15 +86,63 @@ These are internal app interfaces, not custom HTTP endpoints. UI code calls shar
 | 1 | `register / login` | Email, password; name for registration | Signed-in user or authentication error | Zarif |
 | 1 | `observeAuth / logout` | None | Login state / completion | Zarif |
 | 1 | `updateProfile` | Name, goal, units, health note | Saved profile or validation error | Zarif |
-| 2 | `read / requestPermission` | Permission type | Granted, denied or unavailable | Iris
-| 3 | `startActivity` | Activity type, goal, demo/GPS source | Active session | Cassi
-| 3 | `pause / resume` | Session ID | Updated session | Cassi
-| 3 | `finishAndSave` | Session ID | Saved activity summary or retryable error | Cassi
-| 4 | `save / readRecord` | Record / record ID | Saved record / matching record | Henry
-| 4 | `getReport` | Period, date, time zone | Activity totals, health counts, history and comparison | Henry
-| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition | Yan Yu
-| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal | Yan Yu
-| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state | Ricky
+| 2 | `read / requestPermission` | Permission type | Granted, denied or unavailable | Iris |
+| 3 | `startActivity` | Activity type, goal, demo/GPS source | Active session | Cassi |
+| 3 | `pause / resume` | Session ID | Updated session | Cassi |
+| 3 | `finishAndSave` | Session ID | Saved activity summary or retryable error | Cassi |
+| 4 | `save / readRecord` | Record / record ID | Saved record / matching record | Huanyu Zhang (Henry) |
+| 4 | `getReport` | Period, date, time zone | Activity totals, health counts, history and comparison | Huanyu Zhang (Henry) |
+| 5 | `submitCheckIn` | Draft ID, feeling, breathing, fatigue | Saved check-in and condition | Yan Yu |
+| 5 | `estimate / saveMeal` | Photo / edited meal fields | Editable estimate / saved meal | Yan Yu |
+| 6 | `sendWatchCommand` | Command ID, action, session ID; activity options for Start | Acknowledgement and updated session state | Ricky |
+
+### Package 4 contract
+
+Package 4 owns persistence and reporting. It exposes repository interfaces to the other packages; UI code must not access Room DAOs directly.
+
+#### `saveRecord`
+
+- **Input:** A record with a stable `id`, record type, UTC timestamp and domain fields. The repository obtains `ownerId` from the active authenticated session rather than accepting an arbitrary owner from UI code.
+- **Output:** The saved record, or a structured error containing an error code and whether retry is allowed.
+- **Behaviour:** Saving the same `id` again updates or returns the same logical record and must not create a duplicate.
+
+#### `readRecord`
+
+- **Input:** Record ID.
+- **Output:** The matching record for the active owner, `NotFound`, or a structured storage error.
+- **Behaviour:** A record owned by another account must behave as unavailable and must never be returned.
+
+#### `observeHistory`
+
+- **Input:** Period (`Week`, `Month`, `Year` or `All`), reference date and time zone.
+- **Output:** An observable list of the active owner's matching activity and health records, ordered newest first.
+- **Behaviour:** Period boundaries are calculated in the requested time zone; stored timestamps remain UTC.
+
+#### `getReport`
+
+- **Input:** Period, reference date and time zone.
+- **Output:** Activity count, total duration, total distance, health-record count, history and previous-period comparison.
+- **Behaviour:** Missing previous data or a zero baseline returns `NoComparison`; it must not return an invalid percentage.
+
+### Package 4 boundaries
+
+- **Package 1 (Zarif):** supplies the authenticated user identity. Package 4 consumes the active `ownerId` and clears visible streams on logout; it does not implement login.
+- **Package 2 (Iris):** consumes summaries for Today and History navigation. Package 4 supplies data and UI states; it does not own permission requests or the Today layout.
+- **Package 3 (Cassi):** supplies the completed activity record and stable record ID to `saveRecord`. Package 4 persists it; it does not own GPS or live-session state.
+- **Package 5 (Yan Yu):** supplies validated health check-ins to `saveRecord`. Package 4 persists them; it does not calculate the health condition or provide medical advice.
+- **Package 6 (Ricky):** may read the current activity state through the activity owner. Package 4 stores completed records but does not own watch commands or synchronization.
+
+### Package 4 acceptance criteria
+
+- Activity and health records remain available after process restart.
+- Two signed-in accounts cannot read, observe or report on each other's records.
+- Retrying a save with the same record ID never creates a duplicate.
+- Week, Month and Year filters include records at the correct local date boundaries for the supplied time zone.
+- Reports use seconds for duration, metres for distance and UTC timestamps for storage.
+- A zero-distance activity displays no pace rather than dividing by zero.
+- A missing or zero previous-period baseline produces `NoComparison`.
+- History exposes explicit loading, empty, success and retryable error states.
+- Required DAO, repository and report tests pass before Package 4 is marked complete.
 
 ### Shared rules
 
@@ -95,4 +155,3 @@ These are internal app interfaces, not custom HTTP endpoints. UI code calls shar
 - API failures return an error code and whether retry is possible. UI handles loading, empty and error states.
 - Never store raw passwords in app storage. Never log tokens, health notes or precise routes.
 - Demo routes and meal estimates must be labelled. Health messages must not diagnose.
-
