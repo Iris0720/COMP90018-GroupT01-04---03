@@ -16,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.comp90018.model.AppTab
 import com.example.comp90018.permissions.rememberPermissionController
 import com.example.comp90018.model.SessionState
+import com.example.comp90018.health.MealFields
 import com.example.comp90018.tracking.TrackingViewModel
 import com.example.comp90018.ui.screens.activity.ActivityScreen
 import com.example.comp90018.ui.screens.health.HealthScreen
@@ -32,6 +33,9 @@ fun AppNav() {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
     val trackingViewModel: TrackingViewModel = viewModel()
+    val appScope = rememberCoroutineScope()
+    var pendingMealFields by remember { mutableStateOf<MealFields?>(null) }
+    var pendingMealSourceLabel by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = AppBackground,
@@ -64,7 +68,14 @@ fun AppNav() {
                 AppTab.ACTIVITY -> ActivityScreen(
                     trackingViewModel = trackingViewModel
                 )
-                AppTab.HEALTH -> HealthScreen(permissions)
+                AppTab.HEALTH -> HealthScreen(
+                    permissions = permissions,
+                    operationScope = appScope,
+                    mealFields = pendingMealFields,
+                    onMealFieldsChange = { pendingMealFields = it },
+                    mealSourceLabel = pendingMealSourceLabel,
+                    onMealSourceLabelChange = { pendingMealSourceLabel = it }
+                )
             }
         }
     }

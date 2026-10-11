@@ -37,11 +37,20 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 
 @Composable
-fun HealthScreen(permissions: PermissionController, service: HealthMealService? = null) {
+fun HealthScreen(
+    permissions: PermissionController,
+    service: HealthMealService? = null,
+    operationScope: CoroutineScope = rememberCoroutineScope(),
+    mealFields: MealFields? = null,
+    onMealFieldsChange: (MealFields?) -> Unit = {},
+    mealSourceLabel: String = "",
+    onMealSourceLabelChange: (String) -> Unit = {}
+) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val scope = operationScope
     val healthMealService = remember(service, context) {
         service ?: LogMealHealthMealService(
             context.contentResolver,
@@ -55,9 +64,7 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
     var breathing by remember { mutableStateOf<SymptomLevel?>(null) }
     var fatigue by remember { mutableStateOf<SymptomLevel?>(null) }
     var checkInMessage by remember { mutableStateOf<String?>(null) }
-    var mealFields by remember { mutableStateOf<MealFields?>(null) }
     var mealMessage by remember { mutableStateOf<String?>(null) }
-    var mealSourceLabel by remember { mutableStateOf("") }
     var savingMeal by remember { mutableStateOf(false) }
     var pendingPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
     var analysingPhoto by remember { mutableStateOf(false) }
@@ -83,8 +90,8 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
         scope.launch {
             when (val result = healthMealService.estimateMeal(photoUri.toString())) {
                 is FeatureResult.Success -> {
-                    mealFields = result.value.fields
-                    mealSourceLabel = result.value.sourceLabel
+                    onMealFieldsChange(result.value.fields)
+                    onMealSourceLabelChange(result.value.sourceLabel)
                 }
                 is FeatureResult.Failure -> mealMessage = result.message
             }
@@ -214,8 +221,8 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
                 fields = fields,
                 sourceLabel = mealSourceLabel,
                 saving = savingMeal,
-                onChange = { mealFields = it },
-                onCancel = { mealFields = null },
+                onChange = onMealFieldsChange,
+                onCancel = { onMealFieldsChange(null) },
                 onSave = {
                     savingMeal = true
                     mealMessage = null
@@ -227,7 +234,7 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
                                 } else {
                                     "${result.value.fields.name} saved to meal history."
                                 }
-                                mealFields = null
+                                onMealFieldsChange(null)
                             }
                             is FeatureResult.Failure -> mealMessage = result.message
                         }
