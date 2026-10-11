@@ -143,6 +143,7 @@ private fun MainScaffold(
                 AppTab.TODAY -> TodayScreen(
                     historyState = trackingViewModel.historyState,
                     condition = todayCondition,
+                    stepGoal = profile?.dailyStepTarget ?: 10_000,
                     onStartActivity = {
                         if (trackingViewModel.uiState.phase == SessionState.COMPLETE) {
                             trackingViewModel.reset()

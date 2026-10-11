@@ -19,7 +19,12 @@ import com.example.comp90018.domain.model.ActivityType
 import com.example.comp90018.domain.repository.HistoryState
 import com.example.comp90018.health.HealthCondition
 import java.text.DateFormat
+import java.text.NumberFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
+import java.util.Locale
 import com.example.comp90018.ui.components.MetricCard
 import com.example.comp90018.ui.components.StatusChip
 import com.example.comp90018.ui.theme.*
@@ -28,8 +33,29 @@ import com.example.comp90018.ui.theme.*
 fun TodayScreen(
     historyState: HistoryState,
     condition: HealthCondition,
+    stepGoal: Int,
     onStartActivity: () -> Unit
 ) {
+    val todayActivities = when (historyState) {
+        HistoryState.Loading, is HistoryState.Failure -> null
+        HistoryState.Empty -> emptyList()
+        is HistoryState.Success -> {
+            val today = LocalDate.now()
+            val zone = ZoneId.systemDefault()
+            historyState.records
+                .filterIsInstance<ActivityRecord>()
+                .filter { Instant.ofEpochMilli(it.recordedAtEpochMillis).atZone(zone).toLocalDate() == today }
+        }
+    }
+    val todaySteps = todayActivities?.sumOf { it.steps ?: 0L }
+    val todayActiveMinutes = todayActivities?.sumOf { it.durationSeconds }?.div(60)
+    val todayDistanceKm = todayActivities?.sumOf { it.distanceMetres }
+        ?.let { String.format(Locale.getDefault(), "%.1f", it / 1_000.0) }
+    val safeStepGoal = stepGoal.coerceAtLeast(1)
+    val stepProgress = todaySteps?.let { (it.toFloat() / safeStepGoal).coerceIn(0f, 1f) } ?: 0f
+    val stepPercent = todaySteps?.let { ((it * 100) / safeStepGoal).coerceAtMost(100).toInt() }
+    val numberFormat = NumberFormat.getIntegerInstance(Locale.getDefault())
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -44,13 +70,13 @@ fun TodayScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text("TODAY'S MOVEMENT", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFBFE9CE))
-                    Text("6,420", fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("of 10,000 steps", color = Color.White.copy(alpha = .8f))
+                    Text(todaySteps?.let(numberFormat::format) ?: "—", fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("of ${numberFormat.format(safeStepGoal)} steps", color = Color.White.copy(alpha = .8f))
                 }
-                Text("64%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(stepPercent?.let { "$it%" } ?: "—", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             LinearProgressIndicator(
-                progress = { .642f },
+                progress = { stepProgress },
                 modifier = Modifier.fillMaxWidth().height(8.dp),
                 color = Color(0xFF8EE2AB),
                 trackColor = Color.White.copy(alpha = .2f)
@@ -63,8 +89,8 @@ fun TodayScreen(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MetricCard("42", "active min", Modifier.weight(1f))
-            MetricCard("3.6", "km today", Modifier.weight(1f))
+            MetricCard(todayActiveMinutes?.toString() ?: "—", "active min", Modifier.weight(1f))
+            MetricCard(todayDistanceKm ?: "—", "km today", Modifier.weight(1f))
         }
         SectionTitle("Conditions")
         var weather by remember { mutableStateOf<MelbourneWeather?>(null) }
