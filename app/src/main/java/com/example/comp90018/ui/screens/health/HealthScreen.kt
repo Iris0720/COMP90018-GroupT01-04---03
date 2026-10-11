@@ -42,6 +42,8 @@ import kotlinx.coroutines.CoroutineScope
 @Composable
 fun HealthScreen(
     permissions: PermissionController,
+    condition: HealthCondition,
+    onConditionChange: (HealthCondition) -> Unit,
     service: HealthMealService? = null,
     operationScope: CoroutineScope = rememberCoroutineScope(),
     mealFields: MealFields? = null,
@@ -58,7 +60,6 @@ fun HealthScreen(
             OfflineFirstMealRecordStore(context)
         )
     }
-    var condition by remember { mutableStateOf(HealthCondition.UNKNOWN) }
     var showCheckIn by remember { mutableStateOf(false) }
     var feeling by remember { mutableStateOf<Feeling?>(null) }
     var breathing by remember { mutableStateOf<SymptomLevel?>(null) }
@@ -166,7 +167,7 @@ fun HealthScreen(
                 PrimaryButton("Save check-in") {
                     when (val result = healthMealService.submitCheckIn(CheckInDraft(UUID.randomUUID().toString(), feeling, breathing, fatigue))) {
                         is FeatureResult.Success -> {
-                            condition = result.value.condition
+                            onConditionChange(result.value.condition)
                             checkInMessage = "Check-in saved."
                             showCheckIn = false
                         }

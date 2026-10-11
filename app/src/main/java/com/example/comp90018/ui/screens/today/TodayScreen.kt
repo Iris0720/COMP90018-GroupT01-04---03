@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.example.comp90018.domain.model.ActivityRecord
 import com.example.comp90018.domain.model.ActivityType
 import com.example.comp90018.domain.repository.HistoryState
+import com.example.comp90018.health.HealthCondition
 import java.text.DateFormat
 import java.util.Date
 import com.example.comp90018.ui.components.MetricCard
@@ -25,6 +26,7 @@ import com.example.comp90018.ui.theme.*
 @Composable
 fun TodayScreen(
     historyState: HistoryState,
+    condition: HealthCondition,
     onStartActivity: () -> Unit
 ) {
     Column(
@@ -75,9 +77,18 @@ fun TodayScreen(
             }
         }
         SectionTitle("Wellbeing")
-        InfoCard(Sand) {
-            StatusChip("UNKNOWN", Color(0xFFFFE4A8), Ink)
-            Text("Complete a quick check-in before a longer activity.", color = MaterialTheme.colorScheme.secondary)
+        val isConditionGood = condition == HealthCondition.GOOD
+        InfoCard(if (isConditionGood) Mint else Sand) {
+            Text("TODAY'S CONDITION", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            StatusChip(condition.name, if (isConditionGood) Color(0xFFBFE9CE) else Color(0xFFFFE4A8), ForestDark)
+            Text(
+                when (condition) {
+                    HealthCondition.GOOD -> "No concerns reported. Listen to your body while moving."
+                    HealthCondition.CAUTION -> "Consider a lighter activity and seek professional advice if concerned."
+                    HealthCondition.UNKNOWN -> "Complete all questions to calculate a condition. Missing information never defaults to Good."
+                },
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
         SectionTitle("Recent activity")
         InfoCard(Color.White) {

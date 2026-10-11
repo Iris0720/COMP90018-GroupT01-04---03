@@ -10,11 +10,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.comp90018.data.ProfileData
 import com.example.comp90018.health.MealFields
+import com.example.comp90018.health.HealthCondition
 import com.example.comp90018.model.AppTab
 import com.example.comp90018.model.SessionState
 import com.example.comp90018.permissions.rememberPermissionController
@@ -32,6 +34,7 @@ import com.example.comp90018.ui.theme.AppBackground
 import com.example.comp90018.ui.theme.Forest
 import com.example.comp90018.ui.theme.ForestDark
 import com.example.comp90018.ui.theme.TrailwiseTheme
+import java.time.LocalDate
 
 @Composable
 fun AppNav() {
@@ -83,7 +86,14 @@ private fun MainScaffold(
     onLogout: () -> Unit,
     onSaveProfile: (String, Int, String) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
+    var todayCondition by rememberSaveable {
+        mutableStateOf(loadTodayCondition(context, profile?.id))
+    }
+    LaunchedEffect(profile?.id) {
+        todayCondition = loadTodayCondition(context, profile?.id)
+    }
     var showProfile by remember { mutableStateOf(false) }
     val trackingViewModel: TrackingViewModel = viewModel()
     LaunchedEffect(trackingViewModel) {
@@ -132,6 +142,7 @@ private fun MainScaffold(
             when (selectedTab) {
                 AppTab.TODAY -> TodayScreen(
                     historyState = trackingViewModel.historyState,
+                    condition = todayCondition,
                     onStartActivity = {
                         if (trackingViewModel.uiState.phase == SessionState.COMPLETE) {
                             trackingViewModel.reset()
@@ -142,6 +153,11 @@ private fun MainScaffold(
                 AppTab.ACTIVITY -> ActivityScreen(trackingViewModel = trackingViewModel)
                 AppTab.HEALTH -> HealthScreen(
                     permissions = permissions,
+                    condition = todayCondition,
+                    onConditionChange = { condition ->
+                        todayCondition = condition
+                        saveTodayCondition(context, profile?.id, condition)
+                    },
                     operationScope = appScope,
                     mealFields = pendingMealFields,
                     onMealFieldsChange = { pendingMealFields = it },
@@ -152,6 +168,31 @@ private fun MainScaffold(
         }
     }
 }
+
+private fun loadTodayCondition(context: android.content.Context, userId: String?): HealthCondition {
+    if (userId.isNullOrBlank()) return HealthCondition.UNKNOWN
+    val preferences = context.getSharedPreferences(HEALTH_CONDITION_PREFERENCES, android.content.Context.MODE_PRIVATE)
+    val today = LocalDate.now().toString()
+    if (preferences.getString("date_$userId", null) != today) return HealthCondition.UNKNOWN
+    return runCatching {
+        HealthCondition.valueOf(preferences.getString("condition_$userId", null) ?: return HealthCondition.UNKNOWN)
+    }.getOrDefault(HealthCondition.UNKNOWN)
+}
+
+private fun saveTodayCondition(
+    context: android.content.Context,
+    userId: String?,
+    condition: HealthCondition
+) {
+    if (userId.isNullOrBlank()) return
+    context.getSharedPreferences(HEALTH_CONDITION_PREFERENCES, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putString("date_$userId", LocalDate.now().toString())
+        .putString("condition_$userId", condition.name)
+        .apply()
+}
+
+private const val HEALTH_CONDITION_PREFERENCES = "today_health_condition"
 
 private fun initialsOf(name: String): String {
     val parts = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
