@@ -15,12 +15,14 @@ import java.util.UUID
 
 class LogMealHealthMealService(
     private val contentResolver: ContentResolver,
-    private val token: String
+    private val token: String,
+    private val mealRecordStore: HealthMealRecordStore = SupabaseMealRecordStore()
 ) : HealthMealService {
     private val local = DemoHealthMealService()
 
     override fun submitCheckIn(draft: CheckInDraft) = local.submitCheckIn(draft)
-    override fun saveMeal(fields: MealFields) = local.saveMeal(fields)
+    override suspend fun saveMeal(fields: MealFields) = mealRecordStore.saveMeal(fields)
+    override suspend fun getSavedMeals(limit: Int) = mealRecordStore.getSavedMeals(limit)
 
     override suspend fun estimateMeal(photoReference: String): FeatureResult<MealEstimate> = withContext(Dispatchers.IO) {
         if (token.isBlank()) return@withContext FeatureResult.Failure("LogMeal API token is not configured.", false)

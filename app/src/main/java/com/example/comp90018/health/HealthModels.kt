@@ -36,7 +36,11 @@ data class MealEstimate(
     val sourceLabel: String = "Automatic demo estimate from photo"
 )
 
-data class SavedMeal(val fields: MealFields)
+data class SavedMeal(
+    val fields: MealFields,
+    val recordedAt: String = "",
+    val sourceLabel: String = "Meal entry"
+)
 
 sealed interface FeatureResult<out T> {
     data class Success<T>(val value: T) : FeatureResult<T>

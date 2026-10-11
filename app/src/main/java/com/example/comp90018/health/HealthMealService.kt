@@ -3,7 +3,8 @@ package com.example.comp90018.health
 interface HealthMealService {
     fun submitCheckIn(draft: CheckInDraft): FeatureResult<SavedCheckIn>
     suspend fun estimateMeal(photoReference: String): FeatureResult<MealEstimate>
-    fun saveMeal(fields: MealFields): FeatureResult<SavedMeal>
+    suspend fun saveMeal(fields: MealFields): FeatureResult<SavedMeal>
+    suspend fun getSavedMeals(limit: Int = 50): FeatureResult<List<SavedMeal>>
 }
 
 /** Demo implementation. Replace its save calls with the Package 4 repository at integration time. */
@@ -48,7 +49,7 @@ class DemoHealthMealService : HealthMealService {
         )
     }
 
-    override fun saveMeal(fields: MealFields): FeatureResult<SavedMeal> {
+    override suspend fun saveMeal(fields: MealFields): FeatureResult<SavedMeal> {
         if (fields.id.isBlank() || fields.name.isBlank() || fields.serving.isBlank()) {
             return FeatureResult.Failure("Meal name and serving are required.", false)
         }
@@ -58,5 +59,12 @@ class DemoHealthMealService : HealthMealService {
         val saved = SavedMeal(fields)
         meals[fields.id] = saved
         return FeatureResult.Success(saved)
+    }
+
+    override suspend fun getSavedMeals(limit: Int): FeatureResult<List<SavedMeal>> {
+        if (limit !in 1..200) {
+            return FeatureResult.Failure("Meal history limit must be between 1 and 200.", false)
+        }
+        return FeatureResult.Success(meals.values.toList().asReversed().take(limit))
     }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.app.Activity
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,7 +43,11 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val healthMealService = remember(service, context) {
-        service ?: LogMealHealthMealService(context.contentResolver, BuildConfig.LOGMEAL_API_TOKEN)
+        service ?: LogMealHealthMealService(
+            context.contentResolver,
+            BuildConfig.LOGMEAL_API_TOKEN,
+            OfflineFirstMealRecordStore(context)
+        )
     }
     var condition by remember { mutableStateOf(HealthCondition.UNKNOWN) }
     var showCheckIn by remember { mutableStateOf(false) }
@@ -52,9 +57,26 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
     var checkInMessage by remember { mutableStateOf<String?>(null) }
     var mealFields by remember { mutableStateOf<MealFields?>(null) }
     var mealMessage by remember { mutableStateOf<String?>(null) }
+    var mealSourceLabel by remember { mutableStateOf("") }
+    var savingMeal by remember { mutableStateOf(false) }
     var pendingPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
     var analysingPhoto by remember { mutableStateOf(false) }
     var cameraAttempted by rememberSaveable { mutableStateOf(false) }
+    var showMealHistory by rememberSaveable { mutableStateOf(false) }
+    var loadingMealHistory by remember { mutableStateOf(false) }
+    var savedMeals by remember { mutableStateOf<List<SavedMeal>>(emptyList()) }
+
+    fun loadMealHistory() {
+        loadingMealHistory = true
+        mealMessage = null
+        scope.launch {
+            when (val result = healthMealService.getSavedMeals()) {
+                is FeatureResult.Success -> savedMeals = result.value
+                is FeatureResult.Failure -> mealMessage = result.message
+            }
+            loadingMealHistory = false
+        }
+    }
     val estimatePhoto: (Uri) -> Unit = { photoUri ->
         analysingPhoto = true
         mealMessage = null
@@ -62,7 +84,7 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
             when (val result = healthMealService.estimateMeal(photoUri.toString())) {
                 is FeatureResult.Success -> {
                     mealFields = result.value.fields
-                    mealMessage = result.value.sourceLabel
+                    mealSourceLabel = result.value.sourceLabel
                 }
                 is FeatureResult.Failure -> mealMessage = result.message
             }
@@ -75,7 +97,7 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
         if (result.resultCode == Activity.RESULT_OK && photoUri != null) {
             estimatePhoto(photoUri)
         } else {
-            mealMessage = "Photo capture was cancelled. Choose another photo or enter the meal manually."
+            mealMessage = "Photo capture was cancelled. Take another photo or choose one from your gallery."
         }
     }
 
@@ -92,15 +114,27 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
                     )
                 } catch (_: Exception) {
                     pendingPhotoUri = null
-                    mealMessage = "Camera could not be opened. Choose a photo or enter the meal manually."
+                    mealMessage = "Camera could not be opened. Choose a photo from your gallery."
                 }
             } else {
-                mealMessage = "Camera permission is unavailable or denied. Choose a photo or enter the meal manually."
+                mealMessage = "Camera permission is unavailable or denied. Choose a photo from your gallery."
             }
         }
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { photoUri ->
         if (photoUri != null) estimatePhoto(photoUri) else mealMessage = "No photo selected."
+    }
+
+    if (showMealHistory) {
+        BackHandler { showMealHistory = false }
+        MealHistoryScreen(
+            meals = savedMeals,
+            loading = loadingMealHistory,
+            message = mealMessage,
+            onBack = { showMealHistory = false },
+            onRefresh = { loadMealHistory() }
+        )
+        return
     }
 
     Column(
@@ -161,12 +195,12 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
                 )
             }
             OutlinedButton(
-                    onClick = {
-                        mealFields = MealFields(UUID.randomUUID().toString(), "", "", 0, 0, 0, 0)
-                        mealMessage = "Manual entry"
-                    },
-                    modifier = Modifier.fillMaxWidth()
-            ) { Text("Enter manually") }
+                onClick = {
+                    showMealHistory = true
+                    loadMealHistory()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("View meal history") }
             if (analysingPhoto) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -178,28 +212,86 @@ fun HealthScreen(permissions: PermissionController, service: HealthMealService? 
         mealFields?.let { fields ->
             MealEditor(
                 fields = fields,
-                sourceLabel = mealMessage.orEmpty(),
+                sourceLabel = mealSourceLabel,
+                saving = savingMeal,
                 onChange = { mealFields = it },
                 onCancel = { mealFields = null },
                 onSave = {
-                    when (val result = healthMealService.saveMeal(fields)) {
-                        is FeatureResult.Success -> {
-                            mealMessage = "${result.value.fields.name} saved."
-                            mealFields = null
+                    savingMeal = true
+                    mealMessage = null
+                    scope.launch {
+                        when (val result = healthMealService.saveMeal(fields)) {
+                            is FeatureResult.Success -> {
+                                mealMessage = if (result.value.sourceLabel.startsWith("Saved on this device")) {
+                                    "${result.value.fields.name} saved on this device. Sign in to save future meals to the cloud."
+                                } else {
+                                    "${result.value.fields.name} saved to meal history."
+                                }
+                                mealFields = null
+                            }
+                            is FeatureResult.Failure -> mealMessage = result.message
                         }
-                        is FeatureResult.Failure -> mealMessage = result.message
+                        savingMeal = false
                     }
                 }
             )
-        } ?: mealMessage?.let { SupportingMessage(it) }
+        }
+        mealMessage?.let { SupportingMessage(it) }
 
-        Text(
-            "This app provides general wellbeing information only. It does not diagnose or treat medical conditions.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.secondary
-        )
     }
 }
+
+@Composable
+private fun MealHistoryScreen(
+    meals: List<SavedMeal>,
+    loading: Boolean,
+    message: String?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onBack) { Text("Back") }
+            TextButton(onClick = onRefresh, enabled = !loading) { Text("Refresh") }
+        }
+        Text("Meal history", style = MaterialTheme.typography.headlineLarge)
+        message?.let { SupportingMessage(it) }
+        when {
+            loading -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                Text("Loading meal history…")
+            }
+            meals.isEmpty() -> Text("No saved meals yet.", color = MaterialTheme.colorScheme.secondary)
+            else -> meals.forEach { meal ->
+                InfoCard(Color.White) { MealHistoryItem(meal) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealHistoryItem(meal: SavedMeal) {
+    val fields = meal.fields
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(fields.name, fontWeight = FontWeight.Bold)
+        Text(
+            "${fields.serving} · ${fields.calories} kcal · ${fields.proteinGrams} g protein",
+            color = MaterialTheme.colorScheme.secondary,
+            fontSize = 13.sp
+        )
+        if (meal.recordedAt.isNotBlank()) {
+            Text(formatRecordedAt(meal.recordedAt), fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
+
+private fun formatRecordedAt(value: String): String = value
+    .replace('T', ' ')
+    .removeSuffix("Z")
+    .take(16)
 
 @Composable
 private fun ConditionCard(condition: HealthCondition) {
@@ -252,6 +344,7 @@ private fun <T : Enum<T>> ChoiceChips(options: List<T>, selected: T?, onSelect: 
 private fun MealEditor(
     fields: MealFields,
     sourceLabel: String,
+    saving: Boolean,
     onChange: (MealFields) -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit
@@ -267,8 +360,8 @@ private fun MealEditor(
             NumberField("Carbs g", fields.carbohydrateGrams, Modifier.weight(1f)) { onChange(fields.copy(carbohydrateGrams = it)) }
             NumberField("Fat g", fields.fatGrams, Modifier.weight(1f)) { onChange(fields.copy(fatGrams = it)) }
         }
-        PrimaryButton("Save meal", onClick = onSave)
-        TextButton(onClick = onCancel) { Text("Cancel") }
+        PrimaryButton(if (saving) "Saving…" else "Save meal", onClick = { if (!saving) onSave() })
+        TextButton(onClick = onCancel, enabled = !saving) { Text("Cancel") }
     }
 }
 

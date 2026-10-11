@@ -11,15 +11,15 @@
   completes the request. Returning from Settings refreshes status; press Start/Take
   photo again to continue the original action.
 - Camera approval opens the system camera using a scoped FileProvider URI. Denial,
-  cancellation or missing camera apps leave Photo Picker and manual entry available.
+  cancellation or missing camera apps leave Photo Picker available.
   Photo Picker requires no broad media/storage permission.
 - Camera and gallery images feed the existing meal estimation/edit/save flow. Camera
-  access is requested before opening the external camera; gallery and manual entry
-  remain available if camera access is denied.
+  access is requested before opening the external camera; gallery selection remains
+  available if camera access is denied.
 - LogMeal recognition uses the optional `LOGMEAL_API_TOKEN` in `local.properties`.
-  Without a token, photo estimation reports a recoverable error and manual entry stays
-  available. The current meal service is an in-memory demo implementation; persistent
-  repository integration is still required before claiming records survive restart.
+  Without a token, photo estimation reports a recoverable error. Saved meals use the
+  Supabase `meal_entries` table and can be reopened from
+  **View meal history** after the user signs in.
 - Activity still uses sample metrics. The explicit Demo button bypasses permissions;
   real GPS tracking/history persistence belong to the activity/data branches.
 
@@ -42,9 +42,9 @@ Device acceptance checklist:
 4. Location denied/off: retry/settings remain available; Demo works without location.
 5. Health: allow camera, capture, estimate (or token fallback), edit and save a meal;
    cancel capture and retry.
-6. Deny camera: choose a photo or enter manually; invalid nutrition values are rejected.
-   Save a meal and check it appears for the current app session.
-7. No camera/picker handler: show a recovery message and allow manual entry.
+6. Deny camera: choose a photo from the gallery; invalid nutrition values are rejected.
+   Save a meal and check it appears under **View meal history**, including after restart.
+7. No camera/picker handler: show a recovery message and keep the app usable.
 
 Platform references: [notification permission](https://developer.android.com/develop/ui/views/notifications/notification-permission)
 and [Photo Picker](https://developer.android.com/training/data-storage/shared/photo-picker).
@@ -100,7 +100,21 @@ LOGMEAL_API_TOKEN=YOUR_APIUSER_TOKEN
 
 `local.properties` is ignored by Git and must remain untracked. Never place the real token in Kotlin source code or commit it to the repository.
 
-### 4. Sync and run
+### 4. Configure Supabase meal history
+
+Meal records are stored in the shared Supabase project's `meal_entries` table. Add the
+project URL and its publishable key to the same `local.properties` file:
+
+```properties
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+```
+
+Use the publishable key from **Supabase Dashboard → Connect → Mobile → Kotlin**. Never
+put a secret or service-role key in the Android app. The table uses Row Level Security,
+so saving and viewing meal history require a valid signed-in Supabase user session.
+
+### 5. Sync and run
 
 1. Open the project in Android Studio.
 2. Click **Sync Now** if Android Studio reports that Gradle files have changed.
@@ -110,6 +124,7 @@ LOGMEAL_API_TOKEN=YOUR_APIUSER_TOKEN
 6. Open the **Health** tab.
 7. Under **Meal log**, select **Take photo** or **Choose photo**.
 8. Review the returned nutrition estimate, edit it if necessary, and select **Save meal**.
+9. Select **View meal history** to reload saved records from Supabase.
 
 The emulator or phone must have internet access. Clear, well-lit food photos with the whole plate visible provide better results.
 
@@ -144,5 +159,9 @@ On Windows:
 - **403 response:** the account or token does not have access to the requested feature.
 - **429 response:** the account has reached a request or plan limit.
 - **Recognition fails:** confirm internet access and retry with a clear food photo.
+- **Sign in before accessing saved meal records:** the app has no active Supabase Auth
+  session; sign in first, then retry saving or refreshing meal history.
+- **Saved meal does not appear:** confirm `SUPABASE_URL` and
+  `SUPABASE_PUBLISHABLE_KEY`, internet access, and the active sign-in session.
 
 For endpoint details, see the [LogMeal quickstart](https://docs.logmeal.com/docs/guides-getting-started-quickstart).
