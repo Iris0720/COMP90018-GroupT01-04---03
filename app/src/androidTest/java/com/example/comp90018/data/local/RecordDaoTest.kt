@@ -45,7 +45,18 @@ class RecordDaoTest {
     }
 
     @Test
-    fun recordRemainsAvailableAfterDatabaseReopen() = runBlocking {
+    fun deleteById_removesOnlyTheMatchingOwnersRecord() = runBlocking {
+        val dao = database.activityRecordDao()
+        dao.upsert(entity(ownerId = "owner-a", distanceMetres = 1_000))
+        dao.upsert(entity(ownerId = "owner-b", distanceMetres = 2_000))
+
+        assertEquals(1, dao.deleteById("owner-a", "shared-id"))
+        assertEquals(null, dao.findById("owner-a", "shared-id"))
+        assertEquals(2_000, dao.findById("owner-b", "shared-id")!!.distanceMetres)
+    }
+
+    @Test
+    fun recordRemainsAvailableAfterDatabaseReopen(): Unit = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "record-persistence-test.db"
         context.deleteDatabase(databaseName)

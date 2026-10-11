@@ -107,6 +107,20 @@ class RoomRecordRepositoryTest {
     }
 
     @Test
+    fun delete_removesOnlyTheActiveOwnersRecord() = runTest {
+        val draft = activityDraft("shared-id", 1_000)
+        repository.saveRecord(draft)
+        ownerProvider.owner.value = "owner-b"
+        repository.saveRecord(draft.copy(distanceMetres = 2_000))
+
+        val result = repository.deleteRecord("shared-id")
+
+        assertTrue(result is StorageResult.Success)
+        assertEquals(null, activityDao.findById("owner-b", "shared-id"))
+        assertEquals(1_000, activityDao.findById("owner-a", "shared-id")!!.distanceMetres)
+    }
+
+    @Test
     fun reportWithNoPreviousDistance_returnsNoComparison() = runTest {
         repository.saveRecord(activityDraft("activity-1", 2_500))
 
@@ -215,6 +229,13 @@ private class FakeActivityDao : ActivityRecordDao {
     override suspend fun findById(ownerId: String, recordId: String) =
         records.find { it.ownerId == ownerId && it.id == recordId }
 
+    override suspend fun deleteById(ownerId: String, recordId: String): Int {
+        val deleted = records.removeAll {
+            it.ownerId == ownerId && it.id == recordId
+        }
+        return if (deleted) 1 else 0
+    }
+
     override fun observeBetween(ownerId: String, startEpochMillis: Long, endEpochMillis: Long) =
         flowOf(read(ownerId, startEpochMillis, endEpochMillis))
 
@@ -236,6 +257,13 @@ private class FakeHealthDao : HealthCheckInDao {
 
     override suspend fun findById(ownerId: String, recordId: String) =
         records.find { it.ownerId == ownerId && it.id == recordId }
+
+    override suspend fun deleteById(ownerId: String, recordId: String): Int {
+        val deleted = records.removeAll {
+            it.ownerId == ownerId && it.id == recordId
+        }
+        return if (deleted) 1 else 0
+    }
 
     override fun observeBetween(ownerId: String, startEpochMillis: Long, endEpochMillis: Long) =
         flowOf(read(ownerId, startEpochMillis, endEpochMillis))

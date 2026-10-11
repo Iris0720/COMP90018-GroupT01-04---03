@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.comp90018.tracking.TrackPoint
 
+// Displays the recorded route map and a short GPS status message.
 @Composable
 fun RoutePreview(
     segments: List<List<TrackPoint>>,

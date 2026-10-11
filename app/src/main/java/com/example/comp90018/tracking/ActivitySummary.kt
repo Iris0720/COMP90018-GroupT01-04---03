@@ -1,5 +1,6 @@
 package com.example.comp90018.tracking
 
+// Stores the final results of one completed activity session.
 data class ActivitySummary(
     val sessionId: String,
     val activityType: String,

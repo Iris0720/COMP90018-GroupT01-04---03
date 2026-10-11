@@ -35,6 +35,7 @@ class StepTracker(context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    // Connects to the device step-counter sensor and reports cumulative readings.
     fun start(
         onStepCount: (Long) -> Unit,
         onStatus: (String) -> Unit
@@ -105,6 +106,7 @@ class StepTracker(context: Context) {
         }
     }
 
+    // Unregisters the sensor listener when tracking pauses or finishes.
     fun stop() {
         val listener = activeListener ?: return
 

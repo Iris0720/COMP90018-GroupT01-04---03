@@ -40,7 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 
-//Create a dedicated tool for managing the Map Network, one-time network configuration
+// Configures the shared map network client once for the whole app.
 private object TrailwiseMapNetwork {
     private var configured = false
 
@@ -48,7 +48,7 @@ private object TrailwiseMapNetwork {
     @Synchronized
     fun configure(context: Context) {
         if (configured) return
-
+        // Adds a disk cache and the required user-agent header.
         val client = OkHttpClient.Builder()
             .cache(
                 Cache(
@@ -98,6 +98,7 @@ private const val START_LAYER_ID = "activity-start-layer"
 private const val END_SOURCE_ID = "activity-end-source"
 private const val END_LAYER_ID = "activity-end-layer"
 
+// Creates an empty GeoJSON collection before route data is available.
 private fun emptyFeatures(): FeatureCollection {
     return FeatureCollection.fromFeatures(
         emptyArray<Feature>()
@@ -220,6 +221,7 @@ fun ActivityRouteMap(
         }
     }
 
+    // Connects the MapView lifecycle to the current Android screen.
     DisposableEffect(mapView, lifecycleOwner) {
         var disposed = false
         var started = false
@@ -298,7 +300,7 @@ fun ActivityRouteMap(
         }
     }
 
-
+    // Redraws the route whenever the map or GPS points change.
     LaunchedEffect(
         currentMap,
         currentStyle,
@@ -327,6 +329,7 @@ fun ActivityRouteMap(
     )
 }
 
+// Converts recorded points to GeoJSON and updates the route and camera.
 private fun updateRoute(
     map: MapLibreMap,
     style: Style,

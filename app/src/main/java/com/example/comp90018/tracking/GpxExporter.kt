@@ -10,6 +10,7 @@ import java.util.Locale
 // Handles exporting an activity route as a GPX file and sharing it.
 object GpxExporter {
 
+    // Creates a temporary GPX file and opens Android's share chooser.
     fun exportAndShare(
         context: Context,
         summary: ActivitySummary
@@ -83,6 +84,7 @@ object GpxExporter {
         }
     }
 
+    // Converts each recorded route segment into GPX XML.
     private fun buildGpx(
         summary: ActivitySummary
     ): String {
@@ -135,6 +137,7 @@ object GpxExporter {
         }
     }
 
+    // Escapes activity names so they are safe inside XML.
     private fun escapeXml(value: String): String {
         return value
             .replace("&", "&amp;")

@@ -11,7 +11,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.comp90018.model.AppTab
+import com.example.comp90018.model.SessionState
+import com.example.comp90018.tracking.TrackingViewModel
 import com.example.comp90018.ui.screens.activity.ActivityScreen
 import com.example.comp90018.ui.screens.health.HealthScreen
 import com.example.comp90018.ui.screens.profile.ProfileScreen
@@ -25,6 +28,7 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 fun AppNav() {
     var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
+    val trackingViewModel: TrackingViewModel = viewModel()
 
     Scaffold(
         containerColor = AppBackground,
@@ -44,8 +48,19 @@ fun AppNav() {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
-                AppTab.TODAY -> TodayScreen(onStartActivity = { selectedTab = AppTab.ACTIVITY })
-                AppTab.ACTIVITY -> ActivityScreen()
+                AppTab.TODAY -> TodayScreen(
+                    onStartActivity = {
+                        // A new activity should open the setup screen instead of
+                        // showing the summary from the previous completed session.
+                        if (trackingViewModel.uiState.phase == SessionState.COMPLETE) {
+                            trackingViewModel.reset()
+                        }
+                        selectedTab = AppTab.ACTIVITY
+                    }
+                )
+                AppTab.ACTIVITY -> ActivityScreen(
+                    trackingViewModel = trackingViewModel
+                )
                 AppTab.HEALTH -> HealthScreen()
             }
         }

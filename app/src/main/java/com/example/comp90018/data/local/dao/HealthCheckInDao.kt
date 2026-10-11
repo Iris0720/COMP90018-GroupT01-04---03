@@ -14,6 +14,9 @@ interface HealthCheckInDao {
     @Query("SELECT * FROM health_check_in_records WHERE id = :recordId AND ownerId = :ownerId LIMIT 1")
     suspend fun findById(ownerId: String, recordId: String): HealthCheckInRecordEntity?
 
+    @Query("DELETE FROM health_check_in_records WHERE id = :recordId AND ownerId = :ownerId")
+    suspend fun deleteById(ownerId: String, recordId: String): Int
+
     @Query(
         """
         SELECT * FROM health_check_in_records

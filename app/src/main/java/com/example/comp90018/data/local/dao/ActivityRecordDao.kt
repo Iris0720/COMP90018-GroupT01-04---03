@@ -14,6 +14,9 @@ interface ActivityRecordDao {
     @Query("SELECT * FROM activity_records WHERE id = :recordId AND ownerId = :ownerId LIMIT 1")
     suspend fun findById(ownerId: String, recordId: String): ActivityRecordEntity?
 
+    @Query("DELETE FROM activity_records WHERE id = :recordId AND ownerId = :ownerId")
+    suspend fun deleteById(ownerId: String, recordId: String): Int
+
     @Query(
         """
         SELECT * FROM activity_records

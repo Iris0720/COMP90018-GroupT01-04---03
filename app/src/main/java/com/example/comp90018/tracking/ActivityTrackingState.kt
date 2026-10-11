@@ -3,7 +3,15 @@ package com.example.comp90018.tracking
 import com.example.comp90018.model.SessionState
 import java.util.Locale
 
+// Represents the current database save status of a completed activity.
+enum class ActivitySaveState {
+    NOT_SAVED,
+    SAVING,
+    SAVED,
+    FAILED
+}
 
+// Holds all UI data for the current activity tracking session.
 data class ActivityTrackingState(
     val phase: SessionState = SessionState.SETUP,
     val activity: String = "Walking",
@@ -26,8 +34,11 @@ data class ActivityTrackingState(
 
     val sessionId: String? = null,
     val startedAtEpochMillis: Long? = null,
-    val finishedSummary: ActivitySummary? = null
+    val finishedSummary: ActivitySummary? = null,
+    val saveState: ActivitySaveState = ActivitySaveState.NOT_SAVED,
+    val saveError: String? = null
 ) {
+    // Formats the elapsed time for display on the activity screen.
     val formattedTime: String
         get() {
             val seconds = elapsedMillis / 1000
@@ -39,6 +50,8 @@ data class ActivityTrackingState(
                 seconds % 60
             )
         }
+
+    // Calculates progress for either a time or distance goal.
     val goalProgress: Float
         get() {
             val goalAmount: Double
@@ -79,12 +92,15 @@ data class ActivityTrackingState(
                 .coerceIn(0.0, 1.0)
                 .toFloat()
         }
+
+    // Open activities do not have a fixed target.
     val hasFixedGoal: Boolean
         get() = target != "Open"
 
     val goalReached: Boolean
         get() = hasFixedGoal && goalProgress >= 1f
 
+    // Provides user-friendly text for the current goal progress.
     val goalProgressText: String
         get() {
             if (!hasFixedGoal) return "Open goal"

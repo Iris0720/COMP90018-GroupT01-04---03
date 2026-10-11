@@ -1,7 +1,10 @@
 package com.example.comp90018.ui.screens.activity
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,12 +39,36 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.comp90018.tracking.GpxExporter
+import com.example.comp90018.tracking.ActivitySaveState
+import com.example.comp90018.domain.model.ActivityRecord
+import com.example.comp90018.domain.repository.HistoryState
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun ActivityScreen(
     trackingViewModel: TrackingViewModel = viewModel()
 ) {
     val uiState = trackingViewModel.uiState
+
+    var showHistory by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    if (showHistory) {
+        TrainingHistoryScreen(
+            historyState = trackingViewModel.historyState,
+            deletingRecordIds = trackingViewModel.deletingRecordIds,
+            deleteError = trackingViewModel.historyDeleteError,
+            onBack = {
+                showHistory = false
+            },
+            onRetry = trackingViewModel::loadHistory,
+            onDelete = trackingViewModel::deleteHistoryRecords,
+            onDismissDeleteError = trackingViewModel::clearHistoryDeleteError
+        )
+        return
+    }
 
     val context = LocalContext.current
 
@@ -286,14 +313,23 @@ fun ActivityScreen(
                 Text("Start ${uiState.activity}")
             }
 
-            OutlinedButton(
-                onClick = {},
-                enabled = false,
+            Button(
+                onClick = {
+                    trackingViewModel.loadHistory()
+                    showHistory = true
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Mint,
+                    contentColor = ForestDark
+                )
             ) {
-                Text("Training history — coming soon")
+                Text(
+                    text = "Training History",
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -312,8 +348,342 @@ fun ActivityScreen(
 
         SessionState.COMPLETE -> SummaryScreen(
             uiState = uiState,
-            onDone = trackingViewModel::reset
+            onDone = trackingViewModel::reset,
+            onViewHistory = {
+                trackingViewModel.loadHistory()
+                showHistory = true
+            }
         )
+    }
+}
+
+@Composable
+private fun TrainingHistoryScreen(
+    historyState: HistoryState,
+    deletingRecordIds: Set<String>,
+    deleteError: String?,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+    onDelete: (Set<String>) -> Unit,
+    onDismissDeleteError: () -> Unit
+) {
+    var managingRecords by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    var selectedRecordIds by remember {
+        mutableStateOf(emptySet<String>())
+    }
+
+    var showDeleteConfirmation by remember {
+        mutableStateOf(false)
+    }
+
+    var deleteSubmitted by remember {
+        mutableStateOf(false)
+    }
+
+    LaunchedEffect(deletingRecordIds, deleteError, deleteSubmitted) {
+        if (
+            deleteSubmitted &&
+            deletingRecordIds.isEmpty()
+        ) {
+            if (deleteError == null) {
+                managingRecords = false
+                selectedRecordIds = emptySet()
+            }
+            deleteSubmitted = false
+        }
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirmation = false
+            },
+            title = {
+                Text("Delete selected activities?")
+            },
+            text = {
+                Text(
+                    "${selectedRecordIds.size} selected " +
+                            "${if (selectedRecordIds.size == 1) "activity" else "activities"} " +
+                            "will be permanently removed from your training history."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteSubmitted = true
+                        onDelete(selectedRecordIds)
+                        showDeleteConfirmation = false
+                    }
+                ) {
+                    Text(
+                        text = "Delete",
+                        color = ForestDark
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (deleteError != null) {
+        AlertDialog(
+            onDismissRequest = onDismissDeleteError,
+            title = {
+                Text("Unable to delete activity")
+            },
+            text = {
+                Text(deleteError)
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissDeleteError) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // The history list scrolls independently while the return button stays visible.
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                top = 20.dp,
+                end = 20.dp,
+                bottom = 16.dp
+            )
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Training history",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+
+                    TextButton(
+                        onClick = {
+                            managingRecords = !managingRecords
+                            selectedRecordIds = emptySet()
+                        },
+                        enabled = deletingRecordIds.isEmpty()
+                    ) {
+                        Text(
+                            text = if (managingRecords) "Cancel" else "Manage records",
+                            color = ForestDark,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            when (historyState) {
+                HistoryState.Loading -> {
+                    item {
+                        CircularProgressIndicator()
+                    }
+                    item {
+                        Text("Loading saved activities...")
+                    }
+                }
+
+                HistoryState.Empty -> {
+                    item {
+                        Text("No saved activities yet.")
+                    }
+                }
+
+                is HistoryState.Failure -> {
+                    item {
+                        Text(
+                            text = historyState.error.message
+                                ?: "Unable to load training history.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    item {
+                        Button(onClick = onRetry) {
+                            Text("Try again")
+                        }
+                    }
+                }
+
+                is HistoryState.Success -> {
+                    val activities = historyState.records
+                        .filterIsInstance<ActivityRecord>()
+
+                    if (activities.isEmpty()) {
+                        item {
+                            Text("No saved activities yet.")
+                        }
+                    } else {
+                        items(
+                            items = activities,
+                            key = { activity -> activity.id }
+                        ) { activity ->
+                            TrainingHistoryCard(
+                                activity = activity,
+                                selectionEnabled = managingRecords,
+                                selected = activity.id in selectedRecordIds,
+                                onSelectionChange = { selected ->
+                                    selectedRecordIds = if (selected) {
+                                        selectedRecordIds + activity.id
+                                    } else {
+                                        selectedRecordIds - activity.id
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // This action remains above the app navigation while the list scrolls.
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.background,
+            shadowElevation = 4.dp
+        ) {
+            if (managingRecords) {
+                Button(
+                    onClick = {
+                        showDeleteConfirmation = true
+                    },
+                    enabled = selectedRecordIds.isNotEmpty() &&
+                            deletingRecordIds.isEmpty(),
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .fillMaxWidth()
+                        .height(58.dp)
+                ) {
+                    Text(
+                        text = if (deletingRecordIds.isNotEmpty()) {
+                            "Deleting..."
+                        } else {
+                            "Delete selected (${selectedRecordIds.size})"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                PrimaryButton(
+                    text = "Back to Activity",
+                    modifier = Modifier.padding(
+                        horizontal = 20.dp,
+                        vertical = 12.dp
+                    ),
+                    onClick = onBack
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrainingHistoryCard(
+    activity: ActivityRecord,
+    selectionEnabled: Boolean,
+    selected: Boolean,
+    onSelectionChange: (Boolean) -> Unit
+) {
+    val dateText = remember(activity.recordedAtEpochMillis) {
+        DateFormat.getDateTimeInstance(
+            DateFormat.MEDIUM,
+            DateFormat.SHORT
+        ).format(Date(activity.recordedAtEpochMillis))
+    }
+
+    val durationText = remember(activity.durationSeconds) {
+        val hours = activity.durationSeconds / 3_600
+        val minutes = activity.durationSeconds / 60 % 60
+        val seconds = activity.durationSeconds % 60
+
+        if (hours > 0) {
+            String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = selectionEnabled) {
+                onSelectionChange(!selected)
+            },
+        colors = CardDefaults.cardColors(
+            containerColor = Mint
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = activity.activityType.name
+                        .lowercase()
+                        .replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (selectionEnabled) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = onSelectionChange,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = ForestDark,
+                            checkmarkColor = Color.White,
+                            uncheckedColor = ForestDark
+                        )
+                    )
+                }
+            }
+
+            Text(
+                text = dateText,
+                color = MaterialTheme.colorScheme.secondary
+            )
+
+            Text(
+                text = "$durationText · " +
+                        String.format(
+                            Locale.getDefault(),
+                            "%.2f km",
+                            activity.distanceMetres / 1_000.0
+                        )
+            )
+
+            Text(
+                text = activity.steps?.let { "$it steps" }
+                    ?: "Steps unavailable"
+            )
+        }
     }
 }
 
@@ -517,7 +887,8 @@ private fun LiveActivity(
 @Composable
 private fun SummaryScreen(
     uiState: ActivityTrackingState,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onViewHistory: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -553,10 +924,22 @@ private fun SummaryScreen(
             style = MaterialTheme.typography.bodyMedium
         )
 
+        val saveMessage = when (uiState.saveState) {
+            ActivitySaveState.NOT_SAVED -> "Session ended · Not saved yet"
+            ActivitySaveState.SAVING -> "Saving activity..."
+            ActivitySaveState.SAVED -> "Activity saved"
+            ActivitySaveState.FAILED ->
+                uiState.saveError ?: "Unable to save activity"
+        }
+
         Text(
-            text = "Session ended · Not saved yet",
+            text = saveMessage,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary
+            color = if (uiState.saveState == ActivitySaveState.FAILED) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.secondary
+            }
         )
 
         Row(
@@ -606,6 +989,27 @@ private fun SummaryScreen(
             fillAvailableHeight = true
         )
 
+        PrimaryButton(
+            text = "Back to Activity",
+            onClick = onDone
+        )
+
+        OutlinedButton(
+            onClick = onViewHistory,
+            enabled = uiState.saveState == ActivitySaveState.SAVED,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Text(
+                if (uiState.saveState == ActivitySaveState.SAVING) {
+                    "Saving activity..."
+                } else {
+                    "View training history"
+                }
+            )
+        }
+
         OutlinedButton(
             onClick = {
                 val finishedSummary = summary
@@ -644,11 +1048,6 @@ private fun SummaryScreen(
                 color = MaterialTheme.colorScheme.error
             )
         }
-
-        PrimaryButton(
-            text = "Back to Activity",
-            onClick = onDone
-        )
     }
 }
 @Composable

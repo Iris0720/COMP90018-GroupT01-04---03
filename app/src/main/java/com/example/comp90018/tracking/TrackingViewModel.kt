@@ -14,14 +14,47 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import android.location.Location
 import java.util.UUID
+import com.example.comp90018.data.local.TrailwiseDatabase
+import com.example.comp90018.data.repository.LocalActiveOwnerProvider
+import com.example.comp90018.data.repository.RoomRecordRepository
+import com.example.comp90018.domain.model.ActivityRecordDraft
+import com.example.comp90018.domain.model.ActivityType
+import com.example.comp90018.domain.model.HistoryQuery
+import com.example.comp90018.domain.model.ReportPeriod
+import com.example.comp90018.domain.repository.HistoryState
+import com.example.comp90018.domain.repository.RecordRepository
+import com.example.comp90018.domain.repository.StorageResult
+import kotlin.math.roundToLong
+import java.util.TimeZone
 
+// Coordinates the timer, GPS, steps, persistence, and activity UI state.
 class TrackingViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     var uiState by mutableStateOf(ActivityTrackingState())
         private set
 
+    var historyState by mutableStateOf<HistoryState>(HistoryState.Loading)
+        private set
+
+    var deletingRecordIds by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    var historyDeleteError by mutableStateOf<String?>(null)
+        private set
+
+    private val database = TrailwiseDatabase.getInstance(application)
+
+    private val recordRepository: RecordRepository =
+        RoomRecordRepository(
+            activityDao = database.activityRecordDao(),
+            healthDao = database.healthCheckInDao(),
+            ownerProvider = LocalActiveOwnerProvider()
+        )
+
     private var timerJob: Job? = null
+
+    private var historyJob: Job? = null
 
     // Time collected before the current running segment.
     private var accumulatedMillis = 0L
@@ -43,7 +76,6 @@ class TrackingViewModel(
     private var previousLocation: Location? = null
 
 
-
     private companion object {
         const val MAX_ACCEPTED_ACCURACY_METRES = 30f
         const val MIN_MOVEMENT_METRES = 1.5f
@@ -52,6 +84,7 @@ class TrackingViewModel(
         const val MIN_DISTANCE_FOR_PACE_METRES = 10f
     }
 
+    // Updates the chosen activity while the session is still in setup.
     fun selectActivity(activity: String) {
         if (uiState.phase != SessionState.SETUP) return
         if (activity !in listOf("Walking", "Running", "Hiking")) return
@@ -60,6 +93,7 @@ class TrackingViewModel(
     }
 
 
+    // Validates and stores a time, distance, or open target.
     fun selectTarget(target: String) {
         if (uiState.phase != SessionState.SETUP) return
 
@@ -95,6 +129,7 @@ class TrackingViewModel(
         uiState = uiState.copy(target = normalized)
     }
 
+    // Returns active elapsed time without counting paused periods.
     private fun currentElapsedMillis(): Long {
         return if (uiState.phase == SessionState.LIVE) {
             accumulatedMillis +
@@ -122,6 +157,7 @@ class TrackingViewModel(
     }
 
 
+    // Adds a GPS point to the current route or starts a new segment.
     private fun recordRoutePoint(
         location: Location,
         newSegment: Boolean
@@ -146,6 +182,7 @@ class TrackingViewModel(
         )
     }
 
+    // Replaces an approximate start with the first accurate GPS point.
     private fun replaceProvisionalStart(location: Location) {
         val point = TrackPoint(
             latitude = location.latitude,
@@ -157,6 +194,7 @@ class TrackingViewModel(
         )
     }
 
+    // Validates GPS readings before updating distance, pace, and route data.
     private fun handleLocation(location: Location) {
         // Ignore callbacks after pausing or finishing.
         if (uiState.phase != SessionState.LIVE) return
@@ -296,6 +334,7 @@ class TrackingViewModel(
     }
 
 
+    // Refreshes elapsed time and pace while the activity is running.
     private fun startTimer() {
         timerJob?.cancel()
 
@@ -316,6 +355,7 @@ class TrackingViewModel(
         }
     }
 
+    // Starts GPS updates and forwards accepted locations for processing.
     private fun startGps() {
         uiState = uiState.copy(
             gpsStatus = "Waiting for GPS..."
@@ -335,6 +375,7 @@ class TrackingViewModel(
         )
     }
 
+    // Tracks steps relative to a fresh sensor baseline.
     private fun startSteps() {
         // Establish a fresh baseline after starting or resuming.
         previousStepTotal = null
@@ -370,6 +411,7 @@ class TrackingViewModel(
         )
     }
 
+    // Creates a new session and starts all tracking services.
     fun start() {
         if (uiState.phase != SessionState.SETUP) return
 
@@ -402,6 +444,7 @@ class TrackingViewModel(
         startSteps()
     }
 
+    // Pauses the timer and sensors while keeping current progress.
     fun pause() {
         if (uiState.phase != SessionState.LIVE) return
 
@@ -423,6 +466,7 @@ class TrackingViewModel(
         )
     }
 
+    // Resumes tracking and begins a new route segment.
     fun resume() {
         if (uiState.phase != SessionState.PAUSED) return
 
@@ -435,6 +479,101 @@ class TrackingViewModel(
         startSteps()
     }
 
+    // Converts the completed summary into a database record and saves it.
+    private fun saveSummary(summary: ActivitySummary) {
+        uiState = uiState.copy(
+            saveState = ActivitySaveState.SAVING,
+            saveError = null
+        )
+
+        val activityType = when (summary.activityType) {
+            "Walking" -> ActivityType.WALKING
+            "Running" -> ActivityType.RUNNING
+            "Hiking" -> ActivityType.HIKING
+            else -> {
+                uiState = uiState.copy(
+                    saveState = ActivitySaveState.FAILED,
+                    saveError = "Unknown activity type"
+                )
+                return
+            }
+        }
+
+        val draft = ActivityRecordDraft(
+            id = summary.sessionId,
+            recordedAtEpochMillis = summary.finishedAtEpochMillis,
+            activityType = activityType,
+            durationSeconds = summary.activeDurationMillis / 1_000L,
+            distanceMetres = summary.distanceMetres.roundToLong(),
+            steps = summary.recordedSteps
+        )
+
+        viewModelScope.launch {
+            when (val result = recordRepository.saveRecord(draft)) {
+                is StorageResult.Success -> {
+                    uiState = uiState.copy(
+                        saveState = ActivitySaveState.SAVED,
+                        saveError = null
+                    )
+                }
+
+                is StorageResult.Failure -> {
+                    uiState = uiState.copy(
+                        saveState = ActivitySaveState.FAILED,
+                        saveError = result.error.message
+                            ?: "Unable to save activity"
+                    )
+                }
+            }
+        }
+    }
+
+    // Observes all saved records for the active owner so the history screen
+    // updates automatically after an activity is saved.
+    fun loadHistory() {
+        historyJob?.cancel()
+
+        val query = HistoryQuery(
+            period = ReportPeriod.ALL,
+            referenceTimeEpochMillis = System.currentTimeMillis(),
+            timeZoneId = TimeZone.getDefault().id
+        )
+
+        historyJob = viewModelScope.launch {
+            recordRepository.observeHistory(query).collect { state ->
+                historyState = state
+            }
+        }
+    }
+
+    // Deletes the selected history records and reports any failure to the UI.
+    fun deleteHistoryRecords(recordIds: Set<String>) {
+        if (recordIds.isEmpty() || deletingRecordIds.isNotEmpty()) return
+
+        deletingRecordIds = recordIds
+        historyDeleteError = null
+
+        viewModelScope.launch {
+            for (recordId in recordIds) {
+                when (val result = recordRepository.deleteRecord(recordId)) {
+                    is StorageResult.Success -> Unit
+                    is StorageResult.Failure -> {
+                        historyDeleteError = result.error.message
+                            ?: "Unable to delete activity"
+                        break
+                    }
+                }
+            }
+            deletingRecordIds = emptySet()
+        }
+    }
+
+    // Clears the delete error after the user dismisses the message.
+    fun clearHistoryDeleteError() {
+        historyDeleteError = null
+    }
+
+    // Stops tracking, builds the final summary, and saves the activity.
     fun finish() {
         if (
             uiState.phase != SessionState.LIVE &&
@@ -488,8 +627,10 @@ class TrackingViewModel(
             stepStatus = "Step tracking stopped",
             finishedSummary = summary
         )
+        saveSummary(summary)
     }
 
+    // Returns the tracker to its initial setup state for a new activity.
     fun reset() {
         if (uiState.phase != SessionState.COMPLETE) return
 
@@ -521,11 +662,15 @@ class TrackingViewModel(
             sessionId = null,
             startedAtEpochMillis = null,
             finishedSummary = null,
+            saveState = ActivitySaveState.NOT_SAVED,
+            saveError = null
         )
     }
 
+    // Releases active jobs and sensor listeners when the ViewModel closes.
     override fun onCleared() {
         timerJob?.cancel()
+        historyJob?.cancel()
         locationTracker.stopLocationUpdates()
         stepTracker.stop()
         super.onCleared()

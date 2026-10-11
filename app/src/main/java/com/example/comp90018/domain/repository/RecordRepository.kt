@@ -19,6 +19,8 @@ interface RecordRepository {
 
     suspend fun readRecord(recordId: String): StorageResult<Record>
 
+    suspend fun deleteRecord(recordId: String): StorageResult<Unit>
+
     fun observeHistory(query: HistoryQuery): Flow<HistoryState>
 
     suspend fun getReport(query: HistoryQuery): StorageResult<ActivityReport>

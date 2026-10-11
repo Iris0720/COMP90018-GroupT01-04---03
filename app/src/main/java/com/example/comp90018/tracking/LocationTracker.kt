@@ -14,6 +14,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 
+// Manages permission checks and GPS updates from the fused location provider.
 class LocationTracker(
     context: Context
 ) {
@@ -26,6 +27,7 @@ class LocationTracker(
     private var locationCallback: LocationCallback? = null
     private var currentLocationTokenSource: CancellationTokenSource? = null
 
+    // Accepts either precise or approximate location permission.
     fun hasLocationPermission(): Boolean {
         val finePermission = ContextCompat.checkSelfPermission(
             applicationContext,
@@ -123,6 +125,7 @@ class LocationTracker(
             }
     }
 
+    // Cancels both the one-time request and continuous location updates.
     fun stopLocationUpdates() {
         currentLocationTokenSource?.cancel()
         currentLocationTokenSource = null

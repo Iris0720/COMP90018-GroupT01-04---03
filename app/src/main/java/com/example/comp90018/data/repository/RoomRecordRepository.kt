@@ -54,6 +54,18 @@ class RoomRecordRepository(
         }
     }
 
+    override suspend fun deleteRecord(recordId: String): StorageResult<Unit> {
+        if (recordId.isBlank()) return invalidRecord("Record id must not be blank")
+
+        return withOwner { ownerId ->
+            val deletedRows = activityDao.deleteById(ownerId, recordId).let { activityRows ->
+                if (activityRows > 0) activityRows
+                else healthDao.deleteById(ownerId, recordId)
+            }
+            if (deletedRows == 0) throw RecordNotFoundException()
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeHistory(query: HistoryQuery): Flow<HistoryState> = flow {
         emit(HistoryState.Loading)
