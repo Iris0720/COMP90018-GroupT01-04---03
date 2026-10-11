@@ -2,7 +2,6 @@ package com.example.comp90018.ui.screens.login
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,7 +44,6 @@ fun LoginScreen(
     errorMessage: String? = null,
     successMessage: String? = null,
     onSignIn: (email: String, password: String) -> Unit = { _, _ -> },
-    onForgotPassword: () -> Unit = {},
     onCreateAccount: (email: String, password: String) -> Unit = {_, _ -> },
 ) {
     val colors = MaterialTheme.colorScheme
@@ -164,19 +161,6 @@ fun LoginScreen(
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onForgotPassword) {
-                    Text(
-                        text = "Forgot password?",
-                        style = type.labelMedium,
-                        color = colors.primary,
-                    )
-                }
-            }
-
             Spacer(Modifier.height(4.dp))
 
             Button(

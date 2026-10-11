@@ -38,7 +38,20 @@ class LoginViewModel(
             _state.value = LoginUiState(isLoading = true)
             repo.signIn(email, password)
                 .onSuccess { _state.value = LoginUiState(loggedIn = true) }
-                .onFailure { _state.value = LoginUiState(error = it.message) }
+                .onFailure { failure ->
+                    val errorDetails = generateSequence(failure) { it.cause }
+                        .joinToString(" ") { "${it::class.simpleName} ${it.message.orEmpty()}" }
+                        .lowercase()
+                    val message = if (
+                        "invalid_credentials" in errorDetails ||
+                        "invalid credentials" in errorDetails
+                    ) {
+                        "invalid_credentials"
+                    } else {
+                        "Sign in failed. Check your connection and try again."
+                    }
+                    _state.value = LoginUiState(error = message)
+                }
         }
     }
 
