@@ -34,7 +34,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "LOGMEAL_API_TOKEN", "\"${logMealToken.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField(
+            "String",
+            "LOGMEAL_API_TOKEN",
+            "\"${logMealToken.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        )
         buildConfigField("String", "SUPABASE_URL", buildConfigString("SUPABASE_URL"))
         buildConfigField(
             "String",
@@ -77,6 +81,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
@@ -88,6 +93,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
+
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("com.google.android.gms:play-services-location:21.4.0")
@@ -95,7 +102,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.compose.material:material-icons-extended")
-    androidTestImplementation(libs.androidx.room.testing)
 }
 
 ksp {
