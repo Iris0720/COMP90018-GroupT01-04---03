@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "comp90018"
 include(":app")
+include(":watch-shared", ":wear")

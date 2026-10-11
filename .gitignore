@@ -7,4 +7,6 @@
 /captures
 .externalNativeBuild
 .cxx
+.kotlin/
+**/build/
 local.properties

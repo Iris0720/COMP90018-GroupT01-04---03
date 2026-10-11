@@ -1,0 +1,50 @@
+name: Watch companion checks
+
+on:
+  push:
+    branches: [main, feature/watch-companion]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install project SDK
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+      - name: Unit tests, phone/watch APKs and lint
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watch-reports
+          path: |
+            app/build/reports/
+            watch-shared/build/reports/
+            wear/build/reports/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-and-watch-debug-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            wear/build/outputs/apk/debug/*.apk
+          retention-days: 7
