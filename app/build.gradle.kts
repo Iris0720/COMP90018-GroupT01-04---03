@@ -4,37 +4,24 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
-}
-val localPropertiesFile = rootProject.file("local.properties")
-
-val props = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
-
-    require(localPropertiesFile.exists()) {
-        "local.properties not found at: ${localPropertiesFile.absolutePath}"
-    }
-
-    localPropertiesFile.inputStream().use {
-        load(it)
-    }
+    alias(libs.plugins.ksp)
 }
 
-println("LOCAL PROPERTIES PATH = ${localPropertiesFile.absolutePath}")
-println("LOCAL PROPERTIES EXISTS = ${localPropertiesFile.exists()}")
-println("LOCAL PROPERTIES KEYS = ${props.stringPropertyNames()}")
-
-
-val supabaseUrl = requireNotNull(props.getProperty("SUPABASE_URL")) {
-    "SUPABASE_URL is missing from local.properties"
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
+val logMealToken = localProperties.getProperty("LOGMEAL_API_TOKEN", "")
 
-val supabaseKey = requireNotNull(props.getProperty("SUPABASE_PUBLISHABLE_KEY")) {
-    "SUPABASE_PUBLISHABLE_KEY is missing from local.properties"
+fun buildConfigString(propertyName: String): String {
+    val value = localProperties.getProperty(propertyName, "")
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"$value\""
 }
 
 android {
     namespace = "com.example.comp90018"
-
     compileSdk {
         version = release(37)
     }
@@ -47,17 +34,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         buildConfigField(
             "String",
-            "SUPABASE_URL",
-            "\"$supabaseUrl\""
+            "LOGMEAL_API_TOKEN",
+            "\"${logMealToken.replace("\\", "\\\\").replace("\"", "\\\"")}\""
         )
-
+        buildConfigField("String", "SUPABASE_URL", buildConfigString("SUPABASE_URL"))
         buildConfigField(
             "String",
             "SUPABASE_PUBLISHABLE_KEY",
-            "\"$supabaseKey\""
+            buildConfigString("SUPABASE_PUBLISHABLE_KEY")
         )
     }
 
@@ -68,22 +54,29 @@ android {
             }
         }
     }
-
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
     buildFeatures {
         compose = true
         buildConfig = true
     }
 }
 
-// IMPORTANT: dependencies is OUTSIDE android {}
 dependencies {
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.supabase.postgrest)
+    implementation(libs.ktor.client.android)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -91,20 +84,26 @@ dependencies {
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
     implementation(libs.material)
-
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.navigation:navigation-compose:2.8.9")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.8.0"))
-    implementation("io.github.jan-tennert.supabase:auth-kt")
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-
-    implementation("io.ktor:ktor-client-android:3.5.1")
-
+    ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
+
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
+    implementation("org.maplibre.gl:android-sdk:11.8.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.compose.material:material-icons-extended")
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
