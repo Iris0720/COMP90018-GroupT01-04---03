@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -11,7 +12,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.comp90018.model.AppTab
+import com.example.comp90018.permissions.rememberPermissionController
+import com.example.comp90018.model.SessionState
+import com.example.comp90018.health.MealFields
+import com.example.comp90018.tracking.TrackingViewModel
 import com.example.comp90018.ui.screens.activity.ActivityScreen
 import com.example.comp90018.ui.screens.health.HealthScreen
 import com.example.comp90018.ui.screens.profile.ProfileScreen
@@ -23,8 +29,13 @@ import com.example.comp90018.ui.theme.TrailwiseTheme
 
 @Composable
 fun AppNav() {
-    var selectedTab by remember { mutableStateOf(AppTab.TODAY) }
+    val permissions = rememberPermissionController()
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
+    val trackingViewModel: TrackingViewModel = viewModel()
+    val appScope = rememberCoroutineScope()
+    var pendingMealFields by remember { mutableStateOf<MealFields?>(null) }
+    var pendingMealSourceLabel by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = AppBackground,
@@ -44,14 +55,32 @@ fun AppNav() {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
-                AppTab.TODAY -> TodayScreen(onStartActivity = { selectedTab = AppTab.ACTIVITY })
-                AppTab.ACTIVITY -> ActivityScreen()
-                AppTab.HEALTH -> HealthScreen()
+                AppTab.TODAY -> TodayScreen(
+                    onStartActivity = {
+                        // A new activity should open the setup screen instead of
+                        // showing the summary from the previous completed session.
+                        if (trackingViewModel.uiState.phase == SessionState.COMPLETE) {
+                            trackingViewModel.reset()
+                        }
+                        selectedTab = AppTab.ACTIVITY
+                    }
+                )
+                AppTab.ACTIVITY -> ActivityScreen(
+                    trackingViewModel = trackingViewModel
+                )
+                AppTab.HEALTH -> HealthScreen(
+                    permissions = permissions,
+                    operationScope = appScope,
+                    mealFields = pendingMealFields,
+                    onMealFieldsChange = { pendingMealFields = it },
+                    mealSourceLabel = pendingMealSourceLabel,
+                    onMealSourceLabelChange = { pendingMealSourceLabel = it }
+                )
             }
         }
     }
 
-    if (showProfile) ProfileScreen(onDismiss = { showProfile = false })
+    if (showProfile) ProfileScreen(permissions, onDismiss = { showProfile = false })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
