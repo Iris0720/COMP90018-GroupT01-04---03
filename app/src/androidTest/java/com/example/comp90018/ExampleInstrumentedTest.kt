@@ -19,6 +19,7 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.comp90018", appContext.packageName)
+        // The opt-in Watch QA variant must not replace the team's normal app.
+        assertTrue(appContext.packageName in setOf("com.example.comp90018", "com.example.comp90018.watchqa"))
     }
 }

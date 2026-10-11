@@ -48,6 +48,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Isolated device verification without replacing a teammate's installed app.
+            if (providers.gradleProperty("watchQa").orNull == "true") applicationIdSuffix = ".watchqa"
+        }
         release {
             optimization {
                 enable = false
@@ -66,6 +70,11 @@ android {
 }
 
 dependencies {
+    implementation(project(":watch-shared"))
+    implementation(libs.play.wearable)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
@@ -93,10 +102,11 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.compose.ui.test)
+    debugImplementation(libs.compose.test.manifest)
     androidTestImplementation(libs.androidx.room.testing)
 
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("com.google.android.gms:play-services-location:21.4.0")
     implementation("org.maplibre.gl:android-sdk:11.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

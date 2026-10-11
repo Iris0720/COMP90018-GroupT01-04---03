@@ -1,0 +1,6 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Read by Play services, not referenced directly from application Kotlin. -->
+    <string-array name="android_wear_capabilities" translatable="false" tools:ignore="UnusedResources,Typos">
+        <item>trailwise_phone_v1</item>
+    </string-array>
+</resources>

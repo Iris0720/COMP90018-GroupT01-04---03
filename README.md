@@ -1,5 +1,26 @@
 # COMP90018-GroupT01-04---03
 
+Trailwise is the COMP90018 group mobile activity and wellbeing project.
+
+## Watch companion (Ricky / Package 6)
+
+The `wear` module implements the runnable Wear OS command UI; `watch-shared`
+contains its protocol, acknowledgement handling and testable phone bridge.
+Start with the clearly labelled local demo. The phone's debug-only
+**Trailwise Bridge Demo** provides a separate Wear Data Layer test endpoint. The real phone activity
+gateway remains an explicit team integration seam, not a second tracking engine.
+
+- [Run and integrate the watch](docs/WATCH_HANDOFF.md)
+- [Executed tests and remaining verification](docs/WATCH_VERIFICATION.md)
+- [Latest paired-emulator test and merge status](docs/WATCH_MERGE_VERIFICATION_2026-10-11.md)
+
+Build/check all modules with `./gradlew testDebugUnitTest assembleDebug lintDebug`.
+The watch's standalone synthetic demo requires no cloud/API keys; phone cloud
+features use the configuration described below. Paired capability discovery is
+currently unresolved, so the default phone/watch control flow is not verified.
+Do not confuse demo completion with a
+persisted real activity or a completed Canvas submission.
+
 ## Permission branch
 
 - Location, activity recognition, camera and notifications share `PermissionController`.
