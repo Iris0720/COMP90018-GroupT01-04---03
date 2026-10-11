@@ -1,5 +1,12 @@
 package com.example.comp90018.ui.screens.health
 
+import android.content.Context
+import android.content.Intent
+import android.app.Activity
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -7,63 +14,377 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.comp90018.model.WellbeingStatus
+import com.example.comp90018.health.*
+import com.example.comp90018.permissions.PermissionController
+import com.example.comp90018.permissions.PermissionStatus
+import com.example.comp90018.permissions.PermissionStatusCard
+import com.example.comp90018.permissions.PermissionType
+import com.example.comp90018.BuildConfig
 import com.example.comp90018.ui.components.PrimaryButton
 import com.example.comp90018.ui.components.StatusChip
 import com.example.comp90018.ui.theme.ForestDark
 import com.example.comp90018.ui.theme.Mint
 import com.example.comp90018.ui.theme.Sand
 import com.example.comp90018.ui.theme.Sky
+import androidx.core.content.FileProvider
+import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 
 @Composable
-fun HealthScreen() {
-    var status by remember { mutableStateOf(WellbeingStatus.UNKNOWN) }
+fun HealthScreen(
+    permissions: PermissionController,
+    service: HealthMealService? = null,
+    operationScope: CoroutineScope = rememberCoroutineScope(),
+    mealFields: MealFields? = null,
+    onMealFieldsChange: (MealFields?) -> Unit = {},
+    mealSourceLabel: String = "",
+    onMealSourceLabelChange: (String) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val scope = operationScope
+    val healthMealService = remember(service, context) {
+        service ?: LogMealHealthMealService(
+            context.contentResolver,
+            BuildConfig.LOGMEAL_API_TOKEN,
+            OfflineFirstMealRecordStore(context)
+        )
+    }
+    var condition by remember { mutableStateOf(HealthCondition.UNKNOWN) }
+    var showCheckIn by remember { mutableStateOf(false) }
+    var feeling by remember { mutableStateOf<Feeling?>(null) }
+    var breathing by remember { mutableStateOf<SymptomLevel?>(null) }
+    var fatigue by remember { mutableStateOf<SymptomLevel?>(null) }
+    var checkInMessage by remember { mutableStateOf<String?>(null) }
+    var mealMessage by remember { mutableStateOf<String?>(null) }
+    var savingMeal by remember { mutableStateOf(false) }
+    var pendingPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var analysingPhoto by remember { mutableStateOf(false) }
+    var cameraAttempted by rememberSaveable { mutableStateOf(false) }
+    var showMealHistory by rememberSaveable { mutableStateOf(false) }
+    var loadingMealHistory by remember { mutableStateOf(false) }
+    var savedMeals by remember { mutableStateOf<List<SavedMeal>>(emptyList()) }
+
+    fun loadMealHistory() {
+        loadingMealHistory = true
+        mealMessage = null
+        scope.launch {
+            when (val result = healthMealService.getSavedMeals()) {
+                is FeatureResult.Success -> savedMeals = result.value
+                is FeatureResult.Failure -> mealMessage = result.message
+            }
+            loadingMealHistory = false
+        }
+    }
+    val estimatePhoto: (Uri) -> Unit = { photoUri ->
+        analysingPhoto = true
+        mealMessage = null
+        scope.launch {
+            when (val result = healthMealService.estimateMeal(photoUri.toString())) {
+                is FeatureResult.Success -> {
+                    onMealFieldsChange(result.value.fields)
+                    onMealSourceLabelChange(result.value.sourceLabel)
+                }
+                is FeatureResult.Failure -> mealMessage = result.message
+            }
+            analysingPhoto = false
+        }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val photoUri = pendingPhotoUri?.let(Uri::parse)
+        pendingPhotoUri = null
+        if (result.resultCode == Activity.RESULT_OK && photoUri != null) {
+            estimatePhoto(photoUri)
+        } else {
+            mealMessage = "Photo capture was cancelled. Take another photo or choose one from your gallery."
+        }
+    }
+
+    fun takePhoto() {
+        cameraAttempted = true
+        permissions.requestPermission(PermissionType.CAMERA) { permissionStatus ->
+            if (permissionStatus is PermissionStatus.Granted) {
+                try {
+                    val photoTarget = createMealPhotoTarget(context)
+                    pendingPhotoUri = photoTarget.uri.toString()
+                    cameraLauncher.launch(
+                        Intent(context, MealCameraActivity::class.java)
+                            .putExtra(MealCameraActivity.EXTRA_OUTPUT_PATH, photoTarget.file.absolutePath)
+                    )
+                } catch (_: Exception) {
+                    pendingPhotoUri = null
+                    mealMessage = "Camera could not be opened. Choose a photo from your gallery."
+                }
+            } else {
+                mealMessage = "Camera permission is unavailable or denied. Choose a photo from your gallery."
+            }
+        }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { photoUri ->
+        if (photoUri != null) estimatePhoto(photoUri) else mealMessage = "No photo selected."
+    }
+
+    if (showMealHistory) {
+        BackHandler { showMealHistory = false }
+        MealHistoryScreen(
+            meals = savedMeals,
+            loading = loadingMealHistory,
+            message = mealMessage,
+            onBack = { showMealHistory = false },
+            onRefresh = { loadMealHistory() }
+        )
+        return
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Health", style = MaterialTheme.typography.headlineLarge)
+        Text("Health Hub", style = MaterialTheme.typography.headlineLarge)
         Text("A quick, non-diagnostic check-in for planning your activity.", color = MaterialTheme.colorScheme.secondary)
-        InfoCard(if (status == WellbeingStatus.GOOD) Mint else Sand) {
-            Text("TODAY'S CONDITION", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            StatusChip(
-                label = status.name,
-                containerColor = if (status == WellbeingStatus.GOOD) Color(0xFFBFE9CE) else Color(0xFFFFE4A8),
-                contentColor = ForestDark
-            )
-            Text(
-                if (status == WellbeingStatus.GOOD) "No concerns reported. Listen to your body while moving."
-                else "No check-in yet. Missing information never defaults to Good."
-            )
-        }
+        ConditionCard(condition)
+
         Text("Health check-in", style = MaterialTheme.typography.titleLarge)
         InfoCard(Color.White) {
-            Text("How are you feeling?", fontWeight = FontWeight.Bold)
-            Text("Mood · Breathing · Fatigue", color = MaterialTheme.colorScheme.secondary)
-            PrimaryButton(if (status == WellbeingStatus.UNKNOWN) "Start check-in" else "Update check-in") {
-                status = WellbeingStatus.GOOD
+            if (!showCheckIn) {
+                Text("How are you feeling?", fontWeight = FontWeight.Bold)
+                Text("Feeling · Breathing · Fatigue", color = MaterialTheme.colorScheme.secondary)
+                PrimaryButton(if (condition == HealthCondition.UNKNOWN) "Start check-in" else "Update check-in") {
+                    showCheckIn = true
+                    checkInMessage = null
+                }
+            } else {
+                CheckInForm(feeling, breathing, fatigue, { feeling = it }, { breathing = it }, { fatigue = it })
+                PrimaryButton("Save check-in") {
+                    when (val result = healthMealService.submitCheckIn(CheckInDraft(UUID.randomUUID().toString(), feeling, breathing, fatigue))) {
+                        is FeatureResult.Success -> {
+                            condition = result.value.condition
+                            checkInMessage = "Check-in saved."
+                            showCheckIn = false
+                        }
+                        is FeatureResult.Failure -> checkInMessage = result.message
+                    }
+                }
+                TextButton(onClick = { showCheckIn = false }) { Text("Cancel") }
             }
+            checkInMessage?.let { SupportingMessage(it) }
         }
+
         Text("Meal log", style = MaterialTheme.typography.titleLarge)
         InfoCard(Sky) {
             Text("Add a meal", fontWeight = FontWeight.Bold)
-            Text("Use a photo when online or enter meal details manually.", color = MaterialTheme.colorScheme.secondary)
+            Text("Take a food photo to create an automatic estimate. Check and edit it before saving.", color = MaterialTheme.colorScheme.secondary)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = {}, modifier = Modifier.weight(1f)) { Text("Take photo") }
-                OutlinedButton(onClick = {}, modifier = Modifier.weight(1f)) { Text("Enter manually") }
+                OutlinedButton(
+                    onClick = { takePhoto() },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Take photo") }
+                OutlinedButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Choose photo") }
+            }
+            if (cameraAttempted && permissions.status(PermissionType.CAMERA) !is PermissionStatus.Granted) {
+                val cameraStatus = permissions.status(PermissionType.CAMERA)
+                PermissionStatusCard(
+                    permission = PermissionType.CAMERA,
+                    status = cameraStatus,
+                    onRetry = { takePhoto() },
+                    onSettings = { permissions.openSettings(PermissionType.CAMERA, cameraStatus) }
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    showMealHistory = true
+                    loadMealHistory()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("View meal history") }
+            if (analysingPhoto) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Text("Recognising food and calculating nutrition…")
+                }
             }
         }
+
+        mealFields?.let { fields ->
+            MealEditor(
+                fields = fields,
+                sourceLabel = mealSourceLabel,
+                saving = savingMeal,
+                onChange = onMealFieldsChange,
+                onCancel = { onMealFieldsChange(null) },
+                onSave = {
+                    savingMeal = true
+                    mealMessage = null
+                    scope.launch {
+                        when (val result = healthMealService.saveMeal(fields)) {
+                            is FeatureResult.Success -> {
+                                mealMessage = if (result.value.sourceLabel.startsWith("Saved on this device")) {
+                                    "${result.value.fields.name} saved on this device. Sign in to save future meals to the cloud."
+                                } else {
+                                    "${result.value.fields.name} saved to meal history."
+                                }
+                                onMealFieldsChange(null)
+                            }
+                            is FeatureResult.Failure -> mealMessage = result.message
+                        }
+                        savingMeal = false
+                    }
+                }
+            )
+        }
+        mealMessage?.let { SupportingMessage(it) }
+
+    }
+}
+
+@Composable
+private fun MealHistoryScreen(
+    meals: List<SavedMeal>,
+    loading: Boolean,
+    message: String?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onBack) { Text("Back") }
+            TextButton(onClick = onRefresh, enabled = !loading) { Text("Refresh") }
+        }
+        Text("Meal history", style = MaterialTheme.typography.headlineLarge)
+        message?.let { SupportingMessage(it) }
+        when {
+            loading -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                Text("Loading meal history…")
+            }
+            meals.isEmpty() -> Text("No saved meals yet.", color = MaterialTheme.colorScheme.secondary)
+            else -> meals.forEach { meal ->
+                InfoCard(Color.White) { MealHistoryItem(meal) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealHistoryItem(meal: SavedMeal) {
+    val fields = meal.fields
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(fields.name, fontWeight = FontWeight.Bold)
         Text(
-            "This app provides general wellbeing information only. It does not diagnose or treat medical conditions.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.secondary
+            "${fields.serving} · ${fields.calories} kcal · ${fields.proteinGrams} g protein",
+            color = MaterialTheme.colorScheme.secondary,
+            fontSize = 13.sp
+        )
+        if (meal.recordedAt.isNotBlank()) {
+            Text(formatRecordedAt(meal.recordedAt), fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
+
+private fun formatRecordedAt(value: String): String = value
+    .replace('T', ' ')
+    .removeSuffix("Z")
+    .take(16)
+
+@Composable
+private fun ConditionCard(condition: HealthCondition) {
+    val isGood = condition == HealthCondition.GOOD
+    InfoCard(if (isGood) Mint else Sand) {
+        Text("TODAY'S CONDITION", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        StatusChip(condition.name, if (isGood) Color(0xFFBFE9CE) else Color(0xFFFFE4A8), ForestDark)
+        Text(
+            when (condition) {
+                HealthCondition.GOOD -> "No concerns reported. Listen to your body while moving."
+                HealthCondition.CAUTION -> "Consider a lighter activity and seek professional advice if concerned."
+                HealthCondition.UNKNOWN -> "Complete all questions to calculate a condition. Missing information never defaults to Good."
+            }
         )
     }
+}
+
+@Composable
+private fun CheckInForm(
+    feeling: Feeling?,
+    breathing: SymptomLevel?,
+    fatigue: SymptomLevel?,
+    onFeeling: (Feeling) -> Unit,
+    onBreathing: (SymptomLevel) -> Unit,
+    onFatigue: (SymptomLevel) -> Unit
+) {
+    Text("Feeling", fontWeight = FontWeight.Bold)
+    ChoiceChips(Feeling.entries, feeling, onFeeling)
+    Text("Breathing difficulty", fontWeight = FontWeight.Bold)
+    ChoiceChips(SymptomLevel.entries, breathing, onBreathing)
+    Text("Fatigue", fontWeight = FontWeight.Bold)
+    ChoiceChips(SymptomLevel.entries, fatigue, onFatigue)
+}
+
+@Composable
+private fun <T : Enum<T>> ChoiceChips(options: List<T>, selected: T?, onSelect: (T) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { option ->
+            FilterChip(
+                selected = selected == option,
+                onClick = { onSelect(option) },
+                label = { Text(option.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MealEditor(
+    fields: MealFields,
+    sourceLabel: String,
+    saving: Boolean,
+    onChange: (MealFields) -> Unit,
+    onCancel: () -> Unit,
+    onSave: () -> Unit
+) {
+    InfoCard(Color.White) {
+        Text("Review meal", style = MaterialTheme.typography.titleLarge)
+        Text(sourceLabel, color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp)
+        OutlinedTextField(fields.name, { onChange(fields.copy(name = it)) }, label = { Text("Meal name") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(fields.serving, { onChange(fields.copy(serving = it)) }, label = { Text("Serving") }, modifier = Modifier.fillMaxWidth())
+        NumberField("Calories", fields.calories) { onChange(fields.copy(calories = it)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumberField("Protein g", fields.proteinGrams, Modifier.weight(1f)) { onChange(fields.copy(proteinGrams = it)) }
+            NumberField("Carbs g", fields.carbohydrateGrams, Modifier.weight(1f)) { onChange(fields.copy(carbohydrateGrams = it)) }
+            NumberField("Fat g", fields.fatGrams, Modifier.weight(1f)) { onChange(fields.copy(fatGrams = it)) }
+        }
+        PrimaryButton(if (saving) "Saving…" else "Save meal", onClick = { if (!saving) onSave() })
+        TextButton(onClick = onCancel, enabled = !saving) { Text("Cancel") }
+    }
+}
+
+@Composable
+private fun NumberField(label: String, value: Int, modifier: Modifier = Modifier, onChange: (Int) -> Unit) {
+    OutlinedTextField(
+        value = value.toString(),
+        onValueChange = { input -> input.toIntOrNull()?.let(onChange) },
+        label = { Text(label) },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun SupportingMessage(message: String) {
+    Text(message, color = MaterialTheme.colorScheme.secondary, fontSize = 13.sp)
 }
 
 @Composable
@@ -73,4 +394,13 @@ private fun InfoCard(color: Color, content: @Composable ColumnScope.() -> Unit) 
         verticalArrangement = Arrangement.spacedBy(9.dp),
         content = content
     )
+}
+
+private data class MealPhotoTarget(val file: File, val uri: Uri)
+
+private fun createMealPhotoTarget(context: Context): MealPhotoTarget {
+    val directory = File(context.cacheDir, "meal_photos").apply { mkdirs() }
+    val photo = File.createTempFile("meal_", ".jpg", directory)
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photo)
+    return MealPhotoTarget(photo, uri)
 }
