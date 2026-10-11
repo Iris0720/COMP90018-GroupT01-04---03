@@ -27,12 +27,14 @@ import kotlinx.coroutines.flow.flowOf
 class RoomRecordRepository(
     private val activityDao: ActivityRecordDao,
     private val healthDao: HealthCheckInDao,
-    private val ownerProvider: ActiveOwnerProvider
+    private val ownerProvider: ActiveOwnerProvider,
+    private val activityCloudStore: SupabaseActivityRecordStore? = null
 ) : RecordRepository {
     override suspend fun saveRecord(draft: RecordDraft): StorageResult<Record> = withOwner { ownerId ->
         when (draft) {
             is ActivityRecordDraft -> {
                 val entity = draft.toEntity(ownerId)
+                activityCloudStore?.save(entity)
                 activityDao.upsert(entity)
                 entity.toDomain()
             }
@@ -58,9 +60,12 @@ class RoomRecordRepository(
         if (recordId.isBlank()) return invalidRecord("Record id must not be blank")
 
         return withOwner { ownerId ->
-            val deletedRows = activityDao.deleteById(ownerId, recordId).let { activityRows ->
-                if (activityRows > 0) activityRows
-                else healthDao.deleteById(ownerId, recordId)
+            val activity = activityDao.findById(ownerId, recordId)
+            val deletedRows = if (activity != null) {
+                activityCloudStore?.delete(ownerId, recordId)
+                activityDao.deleteById(ownerId, recordId)
+            } else {
+                healthDao.deleteById(ownerId, recordId)
             }
             if (deletedRows == 0) throw RecordNotFoundException()
         }
@@ -79,13 +84,39 @@ class RoomRecordRepository(
             if (ownerId.isNullOrBlank()) {
                 flowOf(HistoryState.Failure(signedOutError()))
             } else {
-                combine(
-                    activityDao.observeBetween(ownerId, window.startEpochMillis, window.endEpochMillis),
-                    healthDao.observeBetween(ownerId, window.startEpochMillis, window.endEpochMillis)
-                ) { activities, healthCheckIns ->
-                    val records = (activities.map { it.toDomain() } + healthCheckIns.map { it.toDomain() })
-                        .sortedByDescending { it.recordedAtEpochMillis }
-                    if (records.isEmpty()) HistoryState.Empty else HistoryState.Success(records)
+                flow {
+                    // A successful cloud read refreshes this device's Room cache.
+                    // If the network is unavailable, the last local cache remains visible.
+                    runCatching {
+                        activityCloudStore?.synchronize(
+                            ownerId = ownerId,
+                            localRecords = activityDao.readAllForOwner(ownerId)
+                        )
+                    }.getOrNull()?.let { cloudRecords ->
+                        activityDao.replaceForOwner(ownerId, cloudRecords)
+                    }
+
+                    emitAll(
+                        combine(
+                            activityDao.observeBetween(
+                                ownerId,
+                                window.startEpochMillis,
+                                window.endEpochMillis
+                            ),
+                            healthDao.observeBetween(
+                                ownerId,
+                                window.startEpochMillis,
+                                window.endEpochMillis
+                            )
+                        ) { activities, healthCheckIns ->
+                            val records = (
+                                    activities.map { it.toDomain() } +
+                                            healthCheckIns.map { it.toDomain() }
+                                    ).sortedByDescending { it.recordedAtEpochMillis }
+                            if (records.isEmpty()) HistoryState.Empty
+                            else HistoryState.Success(records)
+                        }
+                    )
                 }
             }
         })

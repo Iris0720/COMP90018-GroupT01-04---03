@@ -17,6 +17,7 @@ import java.util.UUID
 import com.example.comp90018.data.local.TrailwiseDatabase
 import com.example.comp90018.data.repository.RoomRecordRepository
 import com.example.comp90018.data.repository.SupabaseActiveOwnerProvider
+import com.example.comp90018.data.repository.SupabaseActivityRecordStore
 import com.example.comp90018.domain.model.ActivityRecordDraft
 import com.example.comp90018.domain.model.ActivityType
 import com.example.comp90018.domain.model.HistoryQuery
@@ -49,7 +50,8 @@ class TrackingViewModel(
         RoomRecordRepository(
             activityDao = database.activityRecordDao(),
             healthDao = database.healthCheckInDao(),
-            ownerProvider = SupabaseActiveOwnerProvider()
+            ownerProvider = SupabaseActiveOwnerProvider(),
+            activityCloudStore = SupabaseActivityRecordStore(application)
         )
 
     private var timerJob: Job? = null
