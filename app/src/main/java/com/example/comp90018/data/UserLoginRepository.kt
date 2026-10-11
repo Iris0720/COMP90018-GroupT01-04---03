@@ -7,6 +7,7 @@ interface UserLoginRepository {
     suspend fun register(email: String, password: String): Result<Unit>
 
     fun observeAuth(): Flow<Boolean>
+    fun observeUserId(): Flow<String?>
     suspend fun logout(): Result<Unit>
 
     suspend fun getUserId(): String

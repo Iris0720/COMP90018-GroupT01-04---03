@@ -907,6 +907,7 @@ private fun SummaryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(
                 horizontal = 16.dp,
                 vertical = 8.dp
@@ -983,10 +984,8 @@ private fun SummaryScreen(
         RoutePreview(
             segments = uiState.routeSegments,
             completed = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            fillAvailableHeight = true
+            modifier = Modifier.fillMaxWidth(),
+            chartHeight = 260.dp
         )
 
         PrimaryButton(

@@ -12,6 +12,7 @@ class SupabaseAuthRepository(
 ) : UserLoginRepository {
 
     override suspend fun signIn(email: String, password: String): Result<Unit> = runCatching {
+        requireSupabaseConfiguration()
         client.auth.signInWith(Email) {
             this.email = email
             this.password = password
@@ -19,6 +20,7 @@ class SupabaseAuthRepository(
     }
 
     override suspend fun register(email: String, password: String): Result<Unit> = runCatching {
+        requireSupabaseConfiguration()
         val user = client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
@@ -31,6 +33,16 @@ class SupabaseAuthRepository(
 
     override fun observeAuth(): Flow<Boolean> = client.auth.sessionStatus.map {it is SessionStatus.Authenticated }.distinctUntilChanged()
 
+    override fun observeUserId(): Flow<String?> = client.auth.sessionStatus
+        .map { status ->
+            if (status is SessionStatus.Authenticated) {
+                client.auth.currentUserOrNull()?.id
+            } else {
+                null
+            }
+        }
+        .distinctUntilChanged()
+
     override suspend fun logout(): Result<Unit> = runCatching {
         client.auth.signOut();
     }
@@ -38,6 +50,12 @@ class SupabaseAuthRepository(
     override suspend fun getUserId(): String {
         return client.auth.currentUserOrNull()?.id
             ?: throw IllegalStateException("No authenticated user")
+    }
+
+    private fun requireSupabaseConfiguration() {
+        if (!SupabaseProvider.isConfigured) {
+            throw SupabaseConfigurationException()
+        }
     }
     
 }
