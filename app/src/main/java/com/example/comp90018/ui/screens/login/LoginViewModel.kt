@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.example.comp90018.data.SupabaseAuthRepository
+import com.example.comp90018.data.SupabaseConfigurationException
 import kotlinx.coroutines.flow.collect   // optional on recent coroutines, harmless if present
 import kotlinx.coroutines.flow.update
 
@@ -42,13 +43,11 @@ class LoginViewModel(
                     val errorDetails = generateSequence(failure) { it.cause }
                         .joinToString(" ") { "${it::class.simpleName} ${it.message.orEmpty()}" }
                         .lowercase()
-                    val message = if (
+                    val message = when {
+                        failure is SupabaseConfigurationException -> failure.message.orEmpty()
                         "invalid_credentials" in errorDetails ||
-                        "invalid credentials" in errorDetails
-                    ) {
-                        "invalid_credentials"
-                    } else {
-                        "Sign in failed. Check your connection and try again."
+                                "invalid credentials" in errorDetails -> "invalid_credentials"
+                        else -> "Sign in failed. Check your connection and try again."
                     }
                     _state.value = LoginUiState(error = message)
                 }

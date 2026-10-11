@@ -15,8 +15,8 @@ import androidx.lifecycle.AndroidViewModel
 import android.location.Location
 import java.util.UUID
 import com.example.comp90018.data.local.TrailwiseDatabase
-import com.example.comp90018.data.repository.LocalActiveOwnerProvider
 import com.example.comp90018.data.repository.RoomRecordRepository
+import com.example.comp90018.data.repository.SupabaseActiveOwnerProvider
 import com.example.comp90018.domain.model.ActivityRecordDraft
 import com.example.comp90018.domain.model.ActivityType
 import com.example.comp90018.domain.model.HistoryQuery
@@ -49,7 +49,7 @@ class TrackingViewModel(
         RoomRecordRepository(
             activityDao = database.activityRecordDao(),
             healthDao = database.healthCheckInDao(),
-            ownerProvider = LocalActiveOwnerProvider()
+            ownerProvider = SupabaseActiveOwnerProvider()
         )
 
     private var timerJob: Job? = null
