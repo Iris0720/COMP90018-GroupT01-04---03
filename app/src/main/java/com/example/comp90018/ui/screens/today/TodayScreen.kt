@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,13 +67,43 @@ fun TodayScreen(
             MetricCard("3.6", "km today", Modifier.weight(1f))
         }
         SectionTitle("Conditions")
+        var weather by remember { mutableStateOf<MelbourneWeather?>(null) }
+        var weatherUnavailable by remember { mutableStateOf(false) }
+        var weatherRefreshKey by remember { mutableIntStateOf(0) }
+        LaunchedEffect(weatherRefreshKey) {
+            weatherUnavailable = false
+            weather = try {
+                fetchMelbourneWeather()
+            } catch (_: Exception) {
+                weatherUnavailable = true
+                null
+            }
+        }
         InfoCard(Sky) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("18°", fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Clear and mild", fontWeight = FontWeight.Bold)
-                    Text("Great for a walk · Updated 12 min ago", color = MaterialTheme.colorScheme.secondary)
+            when {
+                weather != null -> {
+                    val currentWeather = weather!!
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${currentWeather.temperatureCelsius}°", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(currentWeather.summary, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Melbourne · High ${currentWeather.highCelsius}° · Low ${currentWeather.lowCelsius}° · Updated ${currentWeather.updatedAt}",
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                    Text("Weather data: Open-Meteo", fontSize = 11.sp, color = MaterialTheme.colorScheme.secondary)
+                }
+                weatherUnavailable -> {
+                    Text("Melbourne weather is temporarily unavailable.", color = MaterialTheme.colorScheme.secondary)
+                    TextButton(onClick = { weatherRefreshKey++ }) { Text("Try again") }
+                }
+                else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Loading Melbourne weather…", color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }
