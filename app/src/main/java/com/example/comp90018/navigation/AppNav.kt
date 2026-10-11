@@ -86,6 +86,9 @@ private fun MainScaffold(
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var showProfile by remember { mutableStateOf(false) }
     val trackingViewModel: TrackingViewModel = viewModel()
+    LaunchedEffect(trackingViewModel) {
+        trackingViewModel.loadHistory()
+    }
     val appScope = rememberCoroutineScope()
     var pendingMealFields by remember { mutableStateOf<MealFields?>(null) }
     var pendingMealSourceLabel by remember { mutableStateOf("") }
@@ -128,6 +131,7 @@ private fun MainScaffold(
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
                 AppTab.TODAY -> TodayScreen(
+                    historyState = trackingViewModel.historyState,
                     onStartActivity = {
                         if (trackingViewModel.uiState.phase == SessionState.COMPLETE) {
                             trackingViewModel.reset()

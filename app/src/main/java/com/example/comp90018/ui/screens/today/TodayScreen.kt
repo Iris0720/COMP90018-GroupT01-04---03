@@ -13,12 +13,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.comp90018.domain.model.ActivityRecord
+import com.example.comp90018.domain.model.ActivityType
+import com.example.comp90018.domain.repository.HistoryState
+import java.text.DateFormat
+import java.util.Date
 import com.example.comp90018.ui.components.MetricCard
 import com.example.comp90018.ui.components.StatusChip
 import com.example.comp90018.ui.theme.*
 
 @Composable
-fun TodayScreen(onStartActivity: () -> Unit) {
+fun TodayScreen(
+    historyState: HistoryState,
+    onStartActivity: () -> Unit
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -73,8 +81,44 @@ fun TodayScreen(onStartActivity: () -> Unit) {
         }
         SectionTitle("Recent activity")
         InfoCard(Color.White) {
-            Text("Morning walk", fontWeight = FontWeight.Bold)
-            Text("Yesterday · 3.2 km · 34 min · 4,180 steps", color = MaterialTheme.colorScheme.secondary)
+            when (historyState) {
+                HistoryState.Loading -> Text(
+                    "Loading your latest activity…",
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                HistoryState.Empty -> Text(
+                    "No saved activities yet. Start an activity to see it here.",
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                is HistoryState.Failure -> Text(
+                    "Activity history is unavailable right now.",
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                is HistoryState.Success -> {
+                    val latest = historyState.records
+                        .filterIsInstance<ActivityRecord>()
+                        .maxByOrNull { it.recordedAtEpochMillis }
+
+                    if (latest == null) {
+                        Text(
+                            "No saved activities yet. Start an activity to see it here.",
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    } else {
+                        Text(latest.activityType.displayName(), fontWeight = FontWeight.Bold)
+                        Text(
+                            listOfNotNull(
+                                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                                    .format(Date(latest.recordedAtEpochMillis)),
+                                String.format("%.1f km", latest.distanceMetres / 1000.0),
+                                "${latest.durationSeconds / 60} min",
+                                latest.steps?.let { "$it steps" }
+                            ).joinToString(" · "),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -90,3 +134,9 @@ private fun InfoCard(color: Color, content: @Composable ColumnScope.() -> Unit) 
 
 @Composable
 private fun SectionTitle(text: String) = Text(text, style = MaterialTheme.typography.titleLarge)
+
+private fun ActivityType.displayName(): String = when (this) {
+    ActivityType.WALKING -> "Walk"
+    ActivityType.RUNNING -> "Run"
+    ActivityType.HIKING -> "Hike"
+}
