@@ -414,6 +414,15 @@ class TrackingViewModel(
     // Creates a new session and starts all tracking services.
     fun start() {
         if (uiState.phase != SessionState.SETUP) return
+        // A live session always shows a route map, so never enter it without
+        // location permission. The screen also gates the permission result;
+        // this check protects other callers and permission-revocation races.
+        if (!locationTracker.hasLocationPermission()) {
+            uiState = uiState.copy(
+                gpsStatus = "Location permission is required to record a route."
+            )
+            return
+        }
 
         accumulatedMillis = 0L
         segmentStartedAt = SystemClock.elapsedRealtime()

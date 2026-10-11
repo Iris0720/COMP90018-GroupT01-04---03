@@ -71,6 +71,9 @@ fun ActivityScreen(
     }
 
     val context = LocalContext.current
+    var locationPermissionDenied by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     val targetType = when {
         uiState.target.endsWith(" min") -> "Time"
@@ -109,8 +112,7 @@ fun ActivityScreen(
         uiState.target
     }
 
-    // Start after the user responds to the physical activity request.
-    // If denied, the timer and permitted GPS tracking still work.
+    // Step counting is optional once location access has been granted.
     val stepPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission()
@@ -135,12 +137,29 @@ fun ActivityScreen(
         }
     }
 
-    // Once the location request finishes, check the step permission.
+    // Do not start a session unless approximate or precise location was granted.
     val locationPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestMultiplePermissions()
-        ) {
-            requestStepsOrStart()
+        ) { result ->
+            val hasLocationPermission =
+                result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                    result[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasLocationPermission) {
+                locationPermissionDenied = false
+                requestStepsOrStart()
+            } else {
+                locationPermissionDenied = true
+            }
         }
 
     fun startActivity() {
@@ -155,8 +174,10 @@ fun ActivityScreen(
         ) == PackageManager.PERMISSION_GRANTED
 
         if (fineGranted || coarseGranted) {
+            locationPermissionDenied = false
             requestStepsOrStart()
         } else {
+            locationPermissionDenied = false
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -286,6 +307,27 @@ fun ActivityScreen(
                 )
 
                 Text("Timer and GPS tracking are ready.")
+            }
+
+            if (locationPermissionDenied) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Location permission was denied. Allow location to record and display your route.",
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        TextButton(onClick = { startActivity() }) {
+                            Text("Try again")
+                        }
+                    }
+                }
             }
 
             Button(
