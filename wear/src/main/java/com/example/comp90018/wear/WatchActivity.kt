@@ -30,7 +30,7 @@ class WatchActivity : ComponentActivity() {
                 }
             }
             WatchScreen(state, demo, vm::refresh, vm::send, vm::retry, vm::enableDemo,
-                vm::demoConnection, vm::demoSignIn)
+                vm::demoConnection, vm::demoSignIn, vm::exitDemo)
         }
     }
 }

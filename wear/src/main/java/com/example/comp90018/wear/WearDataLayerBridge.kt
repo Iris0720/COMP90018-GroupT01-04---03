@@ -15,6 +15,9 @@ class WearDataLayerBridge(context: Context) : WatchBridge {
     private val context = context.applicationContext
     private var selectedPhone: String? = null
 
+    /** Called only after the controller confirms there is no unresolved mutation. */
+    fun resetPhoneSelection() { selectedPhone = null }
+
     override suspend fun sendWatchCommand(command: WatchCommand): WatchAcknowledgement = withContext(Dispatchers.IO) {
         try {
             val nodes = Tasks.await(Wearable.getCapabilityClient(context)

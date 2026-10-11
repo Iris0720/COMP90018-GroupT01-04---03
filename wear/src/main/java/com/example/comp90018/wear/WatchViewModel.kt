@@ -35,6 +35,12 @@ class WatchViewModel(application: Application) : AndroidViewModel(application) {
         _demo.value = true
         refresh()
     }
+    fun exitDemo() {
+        if (!_demo.value || !controller.resetForModeChange()) return
+        realBridge.resetPhoneSelection()
+        _demo.value = false
+        refresh()
+    }
     fun demoSignIn(value: Boolean) {
         if (!_demo.value || _state.value.busy) return
         demoGateway.signedIn = value

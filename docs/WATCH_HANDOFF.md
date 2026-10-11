@@ -25,8 +25,10 @@ Wear UI → WatchController → WearDataLayerBridge → phone RPC service
 
 - `watch-shared`: versioned Kotlin/JSON contract, validation, deduplication,
   account-generation binding, acknowledgement-driven UI controller, demo gateway.
-- `wear`: round-watch scrollable Home, Start setup, Live, Paused and Complete
-  screens. Start supports Walking/Running/Hiking and Open/15 min/1 km goals.
+- `wear`: forest/mint round-watch UI with scrollable Home, Start setup, Live,
+  Paused and Complete screens. Start supports Walking/Running/Hiking and
+  Open/15/30/60 min/1/5 km goals. A metrics card shows HH:MM:SS, km and steps;
+  unavailable steps are shown as an em dash, not zero.
 - `app/.../watch`: manifest RPC service and installable endpoint. No default
   production guest, fake login, hardcoded cloud credentials or automatic demo.
 - `app/src/debug`: separate **Trailwise Bridge Demo** launcher, never included
@@ -63,6 +65,15 @@ distance metres, and missing steps stay nullable.
 8. The visible watch refreshes a healthy live/paused session every 3 seconds;
    polling stops when the Activity is not started or the last response failed.
    No separate watch timer invents unconfirmed phone metrics.
+9. The controller validates successful acknowledgements before replacing its
+   confirmed state: command/version, account generation, session ID, allowed
+   phase, finite non-negative metrics, and save status. A duplicate reply may
+   legitimately report a later state. This is bounded in-memory deduplication,
+   not durable or global exactly-once execution.
+10. Finish requires confirmation; Keep activity cancels without sending Finish.
+    Real unsaved completion offers Retry save, not a new activity. Leaving local
+    demo resets state and phone selection only when safe, then starts a fresh
+    handshake; live/paused sessions and unresolved mutations block this reset.
 
 ## Run in Android Studio
 
@@ -72,13 +83,16 @@ Wear OS emulator/device; select **app** only for the phone APK.
 
 ### Local demo (no phone pairing or API keys needed)
 
-1. Run `wear`. If no configured phone is reachable, tap **Try local demo**.
-2. Tap **Set up activity**, choose type/goal, then Start.
-3. Pause → Resume → Finish. Complete is labelled **Not saved · demo only**.
-4. Scroll to **Simulate disconnect**. Verify mutation controls are disabled and
+1. Run `wear`. If no configured phone is reachable, tap **Explore demo**.
+2. Tap **Start activity**, choose type/goal, then Start.
+3. Pause → Resume → Finish → **Confirm finish**. **Keep activity** cancels Finish.
+   Complete is labelled **Not saved · demo only**.
+4. Open **Demo tools**, then scroll to **Simulate disconnect**. Verify mutation controls are disabled and
    the state is stale. Reconnect and retry/refresh.
 5. **Simulate sign out** clears session data; **Sign in demo** performs a fresh
    handshake. Demo account controls do not alter real Supabase accounts.
+6. After completion, tap **Use phone companion** to leave demo and perform a
+   fresh phone handshake. Demo tools are collapsed by default.
 
 ### Phone ↔ watch demo over real transport
 
@@ -94,6 +108,10 @@ The QA build flag `-PwatchQa=true` adds `.watchqa` to **both** application IDs,
 so device verification does not replace the team's existing installed app.
 Do not mix QA and normal APKs when pairing. Gradle connected tests ordinarily
 uninstall their test applications after execution.
+
+The paired-phone steps above are a verification procedure, not a recorded pass.
+The 11 October check used a Wear emulator only. The debug phone launcher remains
+an independent synthetic bridge demo, not the team's real login/activity flow.
 
 ## Team integration: required seams, not completed merges
 
@@ -146,6 +164,8 @@ ANDROID_SERIAL=<watch-serial> ./gradlew :wear:connectedDebugAndroidTest -PwatchQ
 Reports are under each module's `build/reports/`; debug APKs under
 `app/build/outputs/apk/debug/` and `wear/build/outputs/apk/debug/`.
 See [verification record](WATCH_VERIFICATION.md) for executed results and limits.
+See [11 October UI and command validation](WATCH_UI_VERIFICATION_2026-10-11.md)
+for the latest branch-specific test results.
 
 ## Viva explanation
 
