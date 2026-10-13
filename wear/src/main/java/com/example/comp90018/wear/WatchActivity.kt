@@ -18,11 +18,12 @@ class WatchActivity : ComponentActivity() {
             val vm: WatchViewModel = viewModel()
             val state by vm.state.collectAsState()
             val demo by vm.demo.collectAsState()
-            LaunchedEffect(vm) {
+            // Restart polling when the mode changes; demo ticks locally once per second.
+            LaunchedEffect(vm, demo) {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     vm.refresh()
                     while (true) {
-                        delay(3000)
+                        delay(watchRefreshIntervalMillis(demo))
                         if (!vm.state.value.stale && !vm.state.value.canRetry &&
                             vm.state.value.session?.phase in setOf(com.example.comp90018.watch.WatchPhase.LIVE,
                                 com.example.comp90018.watch.WatchPhase.PAUSED)) vm.refresh()
