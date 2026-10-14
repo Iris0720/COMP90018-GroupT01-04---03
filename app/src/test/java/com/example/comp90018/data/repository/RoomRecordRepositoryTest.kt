@@ -226,6 +226,17 @@ private class FakeActivityDao : ActivityRecordDao {
         records += record
     }
 
+    override suspend fun upsertAll(records: List<ActivityRecordEntity>) {
+        records.forEach { upsert(it) }
+    }
+
+    override suspend fun deleteAllForOwner(ownerId: String) {
+        records.removeAll { it.ownerId == ownerId }
+    }
+
+    override suspend fun readAllForOwner(ownerId: String) =
+        records.filter { it.ownerId == ownerId }
+
     override suspend fun findById(ownerId: String, recordId: String) =
         records.find { it.ownerId == ownerId && it.id == recordId }
 
