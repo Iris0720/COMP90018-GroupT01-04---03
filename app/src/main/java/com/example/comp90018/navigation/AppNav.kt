@@ -20,6 +20,7 @@ import com.example.comp90018.health.HealthCondition
 import com.example.comp90018.model.AppTab
 import com.example.comp90018.model.SessionState
 import com.example.comp90018.permissions.rememberPermissionController
+import com.example.comp90018.tracking.ActivitySaveState
 import com.example.comp90018.tracking.TrackingViewModel
 import com.example.comp90018.ui.screens.activity.ActivityScreen
 import com.example.comp90018.ui.screens.cards.EnterDisplayName
@@ -96,6 +97,42 @@ private fun MainScaffold(
     }
     var showProfile by remember { mutableStateOf(false) }
     val trackingViewModel: TrackingViewModel = viewModel()
+    var logoutAfterSave by remember { mutableStateOf(false) }
+
+    // Logs out after the finished activity is saved.
+    LaunchedEffect(logoutAfterSave, trackingViewModel.uiState.saveState) {
+        if (
+            logoutAfterSave &&
+            trackingViewModel.uiState.saveState == ActivitySaveState.SAVED
+        ) {
+            logoutAfterSave = false
+            trackingViewModel.reset()
+            onLogout()
+        }
+    }
+
+    // Finishes an active session before logging out.
+    val finishActivityAndLogout: () -> Unit = {
+        when (trackingViewModel.uiState.phase) {
+            SessionState.LIVE,
+            SessionState.PAUSED -> {
+                logoutAfterSave = true
+                trackingViewModel.finish()
+            }
+
+            SessionState.COMPLETE -> {
+                if (trackingViewModel.uiState.saveState == ActivitySaveState.SAVED) {
+                    trackingViewModel.reset()
+                    onLogout()
+                } else {
+                    logoutAfterSave = true
+                }
+            }
+
+            SessionState.SETUP -> onLogout()
+        }
+    }
+
     LaunchedEffect(trackingViewModel) {
         trackingViewModel.loadHistory()
     }
@@ -110,7 +147,7 @@ private fun MainScaffold(
             initialStepGoal = profile?.dailyStepTarget ?: 10_000,
             initialUnits = profile?.unitSystem ?: "metric",
             onDismiss = { showProfile = false },
-            onLogout = onLogout,
+            onLogout = finishActivityAndLogout,
             onSave = onSaveProfile
         )
         return
